@@ -11,6 +11,7 @@ import (
 var (
 	WELCOME_MESSAGE string
 	WORKERS_NUM     int
+	TMP_FILE_PREFIX string
 )
 
 func LoadEnv() {
@@ -20,6 +21,7 @@ func LoadEnv() {
 	}
 	WELCOME_MESSAGE = getEnvString("WELCOME_MESSAGE", "")
 	WORKERS_NUM = getEnvInt("WORKERS_NUM", 0)
+	TMP_FILE_PREFIX = getEnvString("TMP_FILE_PREFIX","")
 }
 
 func getEnvString(key, defaultValue string) string {

@@ -5,21 +5,38 @@ import (
 	"time"
 )
 
-type Download struct {
-	ID           string    
-	uRL          string    
-	destination  string    
-	queueID      string   
-	status       string   
-	progress     int     
-	speed        int64    
-	startTime    time.Time 
-	retryCount   int     
+type Status int
+
+const (
+	NOT_STARTED Status = iota
+	PAUSED
+	FAILED
+	COMPLETED
+	ONGOING
+)
+
+type DownloadController struct {
+	ID                  string
+	queueID             string
+	url                 string
+	tempFileDestination string
+	status              Status
+	progress            float64
+	speed               int
 }
 
+type Queue struct {
+	ID                  string
+	saveDestination     string
+	speedLimit          int
+	concurrentDownloadLimit       int
+	startTime           time.Time
+	endTime             time.Time
+	downloadControllers []DownloadController
+}
 
 type DownloadRequest struct {
-	Url string 
+	Url        string
 	FileName   string
 	Chunks     int
 	ChunkSize  int

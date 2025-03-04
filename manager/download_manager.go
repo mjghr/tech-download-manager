@@ -28,7 +28,7 @@ func Download(urlPtr *url.URL) {
 		log.Fatal("empty, can't download the file", err)
 	}
 	log.Println("Content-Length:", contentLengthInBytes)
-	workers, chunkSize := util.CalculateOptimalWorkersAndChunkSize(50000000)
+	workers, chunkSize := util.CalculateOptimalWorkersAndChunkSize(contentLengthInBytes)
 	log.Println("Optimal Workers:", workers)
 	log.Println("Optimal Chunk Size:", chunkSize)
 	fileName, err := util.ExtractFileName(url)
@@ -44,4 +44,6 @@ func Download(urlPtr *url.URL) {
 		TotalSize:  contentLengthInBytes,
 		HttpClient: httpRequestSender,
 	}
+
+
 }
