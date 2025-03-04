@@ -13,15 +13,14 @@ func main() {
 	config.LoadEnv()
 	fmt.Println(config.WELCOME_MESSAGE)
 
-	url, err := GetUrlFromUser()
+	url, err := getUrlFromUser()
 	if err != nil {
 		log.Fatal("invalid URL:", err)
 	}
 
-	fmt.Println(url)
 }
 
-func GetUrlFromUser() (*url.URL, error) {
+func getUrlFromUser() (*url.URL, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("Enter the file URL to download: ")
 	scanner.Scan()
