@@ -3,16 +3,15 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/mjghr/tech-download-manager/config"
 	"log"
 	"net/url"
 	"os"
-	"github.com/mjghr/tech-download-manager/util"
 )
 
-func main(){
-	util.LoadEnv();
-	welcomeMessage := os.Getenv("WELCOME_MESSAGE")
-	fmt.Println(welcomeMessage)
+func main() {
+	config.LoadEnv()
+	fmt.Println(config.WELCOME_MESSAGE)
 
 	url, err := GetUrlFromUser()
 	if err != nil {
@@ -22,8 +21,7 @@ func main(){
 	fmt.Println(url)
 }
 
-
-func GetUrlFromUser()(*url.URL, error){
+func GetUrlFromUser() (*url.URL, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Print("Enter the file URL to download: ")
 	scanner.Scan()
