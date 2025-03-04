@@ -1,7 +1,7 @@
 package models
 
 import (
-	"net/http"
+	"github.com/mjghr/tech-download-manager/client"
 	"time"
 )
 
@@ -24,5 +24,5 @@ type DownloadRequest struct {
 	Chunks     int
 	ChunkSize  int
 	TotalSize  int
-	HttpClient *http.Client
+	HttpClient *client.HTTPClient
 }

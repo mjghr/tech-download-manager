@@ -3,21 +3,22 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/mjghr/tech-download-manager/config"
 	"log"
 	"net/url"
 	"os"
+
+	"github.com/mjghr/tech-download-manager/config"
+	"github.com/mjghr/tech-download-manager/manager"
 )
 
 func main() {
 	config.LoadEnv()
 	fmt.Println(config.WELCOME_MESSAGE)
-
 	url, err := getUrlFromUser()
 	if err != nil {
 		log.Fatal("invalid URL:", err)
 	}
-
+	manager.Download(url)
 }
 
 func getUrlFromUser() (*url.URL, error) {
