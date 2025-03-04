@@ -1,13 +1,13 @@
-package util
+package config
 
 import (
+	"github.com/joho/godotenv"
 	"log"
 	"os"
-	"github.com/joho/godotenv"
 )
 
 var (
-	WELCOME_MESSAGE     string
+	WELCOME_MESSAGE string
 )
 
 func LoadEnv() {
