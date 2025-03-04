@@ -26,7 +26,3 @@ type DownloadRequest struct {
 	TotalSize  int
 	HttpClient *http.Client
 }
-
-type HTTPClient struct {
-	client *http.Client
-}
