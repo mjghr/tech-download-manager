@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
 type Download struct {
 	ID           string    
@@ -12,4 +15,18 @@ type Download struct {
 	speed        int64    
 	startTime    time.Time 
 	retryCount   int     
+}
+
+
+type DownloadRequest struct {
+	Url string 
+	FileName   string
+	Chunks     int
+	ChunkSize  int
+	TotalSize  int
+	HttpClient *http.Client
+}
+
+type HTTPClient struct {
+	client *http.Client
 }
