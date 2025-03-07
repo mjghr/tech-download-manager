@@ -1,8 +1,9 @@
 package models
 
 import (
-	"github.com/mjghr/tech-download-manager/client"
 	"time"
+
+	"github.com/mjghr/tech-download-manager/client"
 )
 
 type Status int
@@ -25,14 +26,27 @@ type DownloadController struct {
 	speed               int
 }
 
+type TimeWindow struct {
+	StartTime time.Time
+	EndTime   time.Time
+	Enabled   bool
+}
+
+type QueueConfig struct {
+	SaveDestination        string
+	MaxConcurrentDownloads int
+	MaxBandwidth           int // in bytes per second, -1 for unlimited
+	ActiveTimeWindow       TimeWindow
+	MaxRetries             int // -1 for unlimited
+}
+
 type Queue struct {
-	ID                  string
-	saveDestination     string
-	speedLimit          int
-	concurrentDownloadLimit       int
-	startTime           time.Time
-	endTime             time.Time
-	downloadControllers []DownloadController
+	ID        string
+	Config    QueueConfig
+	Downloads []*DownloadController
+	Status    Status
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type DownloadRequest struct {
