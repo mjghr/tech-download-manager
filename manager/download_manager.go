@@ -1,10 +1,10 @@
 package manager
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"strconv"
-	"fmt"
 	"sync"
 
 	"github.com/mjghr/tech-download-manager/client"
@@ -42,7 +42,6 @@ func Download(urlPtr *url.URL) {
 		log.Fatal("Error while extracting file name...")
 	}
 
-	
 	log.Println("Filename extracted: ", fileName)
 	downReq := &controller.DownloadRequest{
 		Url:        url,
@@ -57,12 +56,15 @@ func Download(urlPtr *url.URL) {
 	byteRangeArray = downReq.SplitIntoChunks()
 	fmt.Println(byteRangeArray)
 
+	tmpPath := `C:\Users\Mahan Gh\Desktop\tmp`
+	downPath := `C:\Users\Mahan Gh\Desktop\download`
+
 	var wg sync.WaitGroup
 	for idx, byteChunk := range byteRangeArray {
-		wg.Add(1) 
+		wg.Add(1)
 		go func(idx int, byteChunk [2]int) {
 			defer wg.Done()
-			err := downReq.Download(idx, byteChunk)
+			err := downReq.Download(idx, byteChunk, tmpPath)
 			if err != nil {
 				log.Fatal(fmt.Sprintf("Failed to download chunk %v", idx), err)
 			}
@@ -70,16 +72,16 @@ func Download(urlPtr *url.URL) {
 	}
 	wg.Wait()
 
-	err = downReq.MergeDownloads()
+	err = downReq.MergeDownloads(tmpPath, downPath)
 	if err != nil {
 		log.Fatal("Failed merging tmp downloaded files...", err)
 	}
 
-	err = downReq.CleanupTmpFiles()
+	err = downReq.CleanupTmpFiles(tmpPath)
 	if err != nil {
 		log.Fatal("Failed cleaning up tmp downloaded files...", err)
 	}
 
-	log.Println(fmt.Sprintf("File generated: %v\n\n", downReq.FileName))
+	log.Printf("file generated: %v\n\n", downReq.FileName)
 
 }
