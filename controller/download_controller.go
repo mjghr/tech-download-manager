@@ -41,7 +41,7 @@ func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) er
 	log.Printf("Downloading chunk %v", idx)
 	method := "GET"
 	headers := map[string]string{
-		"User-Agent": "CFD Downloader",
+		"User-Agent": "tech-idm",
 		"Range":      fmt.Sprintf("bytes=%v-%v", byteChunk[0], byteChunk[1]),
 	}
 	resp, err := d.HttpClient.SendRequest(method, d.Url, headers)
