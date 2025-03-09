@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 
@@ -56,8 +59,43 @@ func Download(urlPtr *url.URL) {
 	byteRangeArray = downReq.SplitIntoChunks()
 	fmt.Println(byteRangeArray)
 
-	tmpPath := `C:\Users\Mahan Gh\Desktop\tmp`
-	downPath := `C:\Users\Mahan Gh\Desktop\download`
+	var tmpPath, downPath string
+	switch runtime.GOOS {
+	case "windows":
+		// Windows paths
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Failed to get user home directory:", err)
+		}
+		tmpPath = filepath.Join(userHome, "Desktop", "tmp")
+		downPath = filepath.Join(userHome, "Desktop", "download")
+	case "darwin":
+		// macOS paths
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Failed to get user home directory:", err)
+		}
+		tmpPath = filepath.Join(userHome, "Downloads", "tmp")
+		downPath = filepath.Join(userHome, "Downloads", "download")
+	case "linux":
+		// Linux paths
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Failed to get user home directory:", err)
+		}
+		tmpPath = filepath.Join(userHome, "Downloads", "tmp")
+		downPath = filepath.Join(userHome, "Downloads", "download")
+	default:
+		log.Fatal("Unsupported operating system")
+	}
+
+	// Create directories if they don't exist
+	if err := os.MkdirAll(tmpPath, 0755); err != nil {
+		log.Fatal("Failed to create tmp directory:", err)
+	}
+	if err := os.MkdirAll(downPath, 0755); err != nil {
+		log.Fatal("Failed to create download directory:", err)
+	}
 
 	var wg sync.WaitGroup
 	for idx, byteChunk := range byteRangeArray {
