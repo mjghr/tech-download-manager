@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"sync"
 
@@ -60,34 +58,8 @@ func Download(urlPtr *url.URL) {
 	fmt.Println(byteRangeArray)
 
 	var tmpPath, downPath string
-	switch runtime.GOOS {
-	case "windows":
-		// Windows paths
-		userHome, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal("Failed to get user home directory:", err)
-		}
-		tmpPath = filepath.Join(userHome, "Desktop", "tmp")
-		downPath = filepath.Join(userHome, "Desktop", "download")
-	case "darwin":
-		// macOS paths
-		userHome, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal("Failed to get user home directory:", err)
-		}
-		tmpPath = filepath.Join(userHome, "Downloads", "tmp")
-		downPath = filepath.Join(userHome, "Downloads", "download")
-	case "linux":
-		// Linux paths
-		userHome, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal("Failed to get user home directory:", err)
-		}
-		tmpPath = filepath.Join(userHome, "Downloads", "tmp")
-		downPath = filepath.Join(userHome, "Downloads", "download")
-	default:
-		log.Fatal("Unsupported operating system")
-	}
+	tmpPath = util.GiveDefaultTempPath()
+	downPath = util.GiveDefaultSavePath()
 
 	// Create directories if they don't exist
 	if err := os.MkdirAll(tmpPath, 0755); err != nil {
