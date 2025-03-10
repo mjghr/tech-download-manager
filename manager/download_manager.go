@@ -53,6 +53,7 @@ func Download(urlPtr *url.URL) {
 		ChunkSize:  chunkSize,
 		TotalSize:  contentLengthInBytes,
 		HttpClient: httpRequestSender,
+		SpeedLimit: 1024 * 25,
 	}
 
 	byteRangeArray := make([][2]int, workers)
