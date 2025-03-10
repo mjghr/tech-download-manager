@@ -64,7 +64,7 @@ func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) er
 	}
 	defer file.Close()
 
-	chunkSpeedLimit := d.SpeedLimit / d.Chunks
+	chunkSpeedLimit := d.SpeedLimit
 	// Apply speed limit
 	if chunkSpeedLimit > 0 {
 		limitedReader := &io.LimitedReader{
