@@ -11,6 +11,8 @@ import (
 )
 
 type DownloadController struct {
+	ID         string
+	QueueID    string
 	Url        string
 	FileName   string
 	Chunks     int
