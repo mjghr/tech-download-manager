@@ -2,16 +2,15 @@ package controller
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"io"
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/config"
 )
 
-
-type DownloadRequest struct {
+type DownloadController struct {
 	Url        string
 	FileName   string
 	Chunks     int
@@ -20,7 +19,7 @@ type DownloadRequest struct {
 	HttpClient *client.HTTPClient
 }
 
-func (d *DownloadRequest) SplitIntoChunks() [][2]int {
+func (d *DownloadController) SplitIntoChunks() [][2]int {
 	arr := make([][2]int, d.Chunks)
 	for i := range d.Chunks {
 		if i == 0 {
@@ -37,7 +36,7 @@ func (d *DownloadRequest) SplitIntoChunks() [][2]int {
 	return arr
 }
 
-func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) error {
+func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
 	log.Printf("Downloading chunk %v", idx)
 	method := "GET"
 	headers := map[string]string{
@@ -65,8 +64,7 @@ func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) er
 	return nil
 }
 
-
-func (d *DownloadRequest) MergeDownloads(dirPath, mergeDir string) error {
+func (d *DownloadController) MergeDownloads(dirPath, mergeDir string) error {
 	outFile := fmt.Sprintf("%v/%v", mergeDir, d.FileName)
 	out, err := os.Create(outFile)
 	if err != nil {
@@ -93,8 +91,7 @@ func (d *DownloadRequest) MergeDownloads(dirPath, mergeDir string) error {
 	return nil
 }
 
-
-func (d *DownloadRequest) CleanupTmpFiles(tmpPath string) error {
+func (d *DownloadController) CleanupTmpFiles(tmpPath string) error {
 	log.Println("Starting to clean tmp downloaded files...")
 	for idx := range d.Chunks {
 		fileName := fmt.Sprintf("%v/%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, idx)
