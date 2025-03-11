@@ -23,37 +23,19 @@ const (
 )
 
 type DownloadController struct {
-	ID          string
-	QueueID     string
-	Url         string
-	Status      Status
-	FileName    string
-	Chunks      int
-	ChunkSize   int
-	TotalSize   int
-	HttpClient  *client.HTTPClient
-	SpeedLimit  int
-	TokenBucket chan struct{}
-	PauseChn    chan bool
-	PauseMutex  sync.Mutex
-	ResumeChan  chan bool
-}
-
-func (d *DownloadController) InitTokenBucket() {
-	d.TokenBucket = make(chan struct{}, d.SpeedLimit) // Create a buffered channel with capacity equal to SpeedLimit
-	ticker := time.NewTicker(time.Second)             // Refill tokens every second
-
-	go func() {
-		for range ticker.C {
-			for range d.SpeedLimit {
-				select {
-				case d.TokenBucket <- struct{}{}:
-				default:
-					continue
-				}
-			}
-		}
-	}()
+	ID         string
+	QueueID    string
+	Url        string
+	Status     Status
+	FileName   string
+	Chunks     int
+	ChunkSize  int
+	TotalSize  int
+	HttpClient *client.HTTPClient
+	SpeedLimit int
+	PauseChan  chan bool
+	PauseMutex sync.Mutex
+	ResumeChan chan bool
 }
 
 func (d *DownloadController) SplitIntoChunks() [][2]int {
@@ -74,7 +56,7 @@ func (d *DownloadController) SplitIntoChunks() [][2]int {
 }
 
 func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
-	log.Printf("Downloading chunk %v", idx)
+	// log.Printf("Downloading chunk %v", idx)
 	method := "GET"
 	headers := map[string]string{
 		"User-Agent": "tech-idm",
@@ -91,7 +73,7 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	defer resp.Body.Close()
 
 	// Define chunk file
-	fileName := fmt.Sprintf("%v/%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, idx)
+	fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
 	file, err := os.Create(fileName)
 	if err != nil {
 		return fmt.Errorf("can't create file %v", fileName)
@@ -104,15 +86,8 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	// Apply speed limit
 	if chunkSpeedLimit > 0 {
 		for {
-			d.PauseMutex.Lock()
-			if d.Status == PAUSED {
-				d.PauseMutex.Unlock()
-				<-d.ResumeChan // Wait until resume is called
-				log.Printf("Resuming chunk %v", idx)
-			} else {
-				d.PauseMutex.Unlock()
-			}
-			<-d.TokenBucket // Wait for a token before reading
+
+			d.checkPause()
 			n, readErr := resp.Body.Read(buffer)
 			if n > 0 {
 				_, writeErr := file.Write(buffer[:n])
@@ -136,7 +111,7 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 		}
 	}
 
-	log.Printf("Wrote chunk %v to file", idx)
+	// log.Printf("Wrote chunk %v to file", idx)
 	elapsed := time.Since(startTime).Seconds()
 	log.Printf("Chunk %v downloaded in %.2f seconds", idx, elapsed)
 	return nil
@@ -151,7 +126,7 @@ func (d *DownloadController) MergeDownloads(dirPath, mergeDir string) error {
 	defer out.Close()
 
 	for idx := range d.Chunks {
-		fileName := fmt.Sprintf("%v/%v-%v.tmp", dirPath, config.TMP_FILE_PREFIX, idx)
+		fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", dirPath, config.TMP_FILE_PREFIX, d.FileName, idx)
 
 		in, err := os.Open(fileName)
 		if err != nil {
@@ -165,20 +140,30 @@ func (d *DownloadController) MergeDownloads(dirPath, mergeDir string) error {
 		}
 	}
 
-	fmt.Println("File chunks merged successfully into", outFile)
+	// fmt.Println("File chunks merged successfully into", outFile)
 	return nil
 }
 
 func (d *DownloadController) CleanupTmpFiles(tmpPath string) error {
-	log.Println("Starting to clean tmp downloaded files...")
+	// log.Println("Starting to clean tmp downloaded files...")
 	for idx := range d.Chunks {
-		fileName := fmt.Sprintf("%v/%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, idx)
+		fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
 		err := os.Remove(fileName)
 		if err != nil {
 			return fmt.Errorf("failed to remove chunk file %s: %v", fileName, err)
 		}
 	}
 	return nil
+}
+
+func (d *DownloadController) checkPause() {
+	d.PauseMutex.Lock()
+	if d.Status == PAUSED {
+		d.PauseMutex.Unlock()
+		<-d.ResumeChan
+	} else {
+		d.PauseMutex.Unlock()
+	}
 }
 
 func (d *DownloadController) Pause() {

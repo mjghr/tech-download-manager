@@ -1,8 +1,10 @@
 package models
 
 import (
-	"github.com/mjghr/tech-download-manager/client"
 	"time"
+
+	"github.com/mjghr/tech-download-manager/client"
+	"github.com/mjghr/tech-download-manager/controller"
 )
 
 type Status int
@@ -15,24 +17,14 @@ const (
 	ONGOING
 )
 
-type DownloadController struct {
-	ID                  string
-	queueID             string
-	url                 string
-	tempFileDestination string
-	status              Status
-	progress            float64
-	speed               int
-}
-
 type Queue struct {
-	ID                  string
-	saveDestination     string
-	speedLimit          int
-	concurrentDownloadLimit       int
-	startTime           time.Time
-	endTime             time.Time
-	downloadControllers []DownloadController
+	ID                      string
+	SaveDestination         string
+	SpeedLimit              int
+	ConcurrentDownloadLimit int
+	StartTime               time.Time
+	EndTime                 time.Time
+	DownloadControllers     []controller.DownloadController
 }
 
 type DownloadRequest struct {
