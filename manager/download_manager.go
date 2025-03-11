@@ -44,7 +44,7 @@ func Download(urlPtr *url.URL) {
 	}
 
 	log.Println("Filename extracted: ", fileName)
-	downReq := &controller.DownloadRequest{
+	downReq := &controller.DownloadController{
 		Url:        url,
 		FileName:   fileName,
 		Chunks:     workers,

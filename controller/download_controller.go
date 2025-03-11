@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 	"io"
-	"io"
 	"log"
 	"os"
 	"time"
@@ -24,7 +23,7 @@ type DownloadController struct {
 	TokenBucket chan struct{}
 }
 
-func (d *DownloadRequest) InitTokenBucket() {
+func (d *DownloadController) InitTokenBucket() {
 	d.TokenBucket = make(chan struct{}, d.SpeedLimit) // Create a buffered channel with capacity equal to SpeedLimit
 	ticker := time.NewTicker(time.Second)             // Refill tokens every second
 
