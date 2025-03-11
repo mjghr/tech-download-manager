@@ -2,24 +2,41 @@ package controller
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"io"
 	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/config"
 )
 
-
 type DownloadRequest struct {
-	Url        string
-	FileName   string
-	Chunks     int
-	ChunkSize  int
-	TotalSize  int
-	HttpClient *client.HTTPClient
-	SpeedLimit int 
+	Url         string
+	FileName    string
+	Chunks      int
+	ChunkSize   int
+	TotalSize   int
+	HttpClient  *client.HTTPClient
+	SpeedLimit  int
+	TokenBucket chan struct{}
+}
+
+func (d *DownloadRequest) InitTokenBucket() {
+	d.TokenBucket = make(chan struct{}, d.SpeedLimit) // Create a buffered channel with capacity equal to SpeedLimit
+	ticker := time.NewTicker(time.Second)             // Refill tokens every second
+
+	go func() {
+		for range ticker.C {
+			for i := 0; i < d.SpeedLimit; i++ {
+				select {
+				case d.TokenBucket <- struct{}{}:
+				default:
+					continue
+				}
+			}
+		}
+	}()
 }
 
 func (d *DownloadRequest) SplitIntoChunks() [][2]int {
@@ -65,37 +82,20 @@ func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) er
 	defer file.Close()
 
 	chunkSpeedLimit := d.SpeedLimit
+	buffer := make([]byte, 32*1024) // 32 KB buffer
+	startTime := time.Now()
 	// Apply speed limit
 	if chunkSpeedLimit > 0 {
-		limitedReader := &io.LimitedReader{
-			R: resp.Body,
-			N: int64(byteChunk[1] - byteChunk[0] + 1), // Total bytes to read
-		}
-
-		buffer := make([]byte, 32*1024) // 32 KB buffer
-		startTime := time.Now()
-		var totalWritten int64
-
 		for {
-			n, readErr := limitedReader.Read(buffer)
+			<-d.TokenBucket // Wait for a token before reading
+			n, readErr := resp.Body.Read(buffer)
 			if n > 0 {
-				written, writeErr := file.Write(buffer[:n])
-				totalWritten += int64(written)
+				_, writeErr := file.Write(buffer[:n])
 				if writeErr != nil {
 					return fmt.Errorf("failed writing chunk %v: %v", idx, writeErr)
 				}
 			}
 
-			// If limit is set, enforce speed control
-			if chunkSpeedLimit > 0 && totalWritten > 0 {
-				elapsed := time.Since(startTime).Seconds()
-				expectedTime := float64(totalWritten) / float64(chunkSpeedLimit)
-				if elapsed < expectedTime {
-					time.Sleep(time.Duration((expectedTime-elapsed)*1000) * time.Millisecond)
-				}
-			}
-
-			// Break on EOF
 			if readErr == io.EOF {
 				break
 			}
@@ -112,10 +112,10 @@ func (d *DownloadRequest) Download(idx int, byteChunk [2]int, tmpPath string) er
 	}
 
 	log.Printf("Wrote chunk %v to file", idx)
+	elapsed := time.Since(startTime).Seconds()
+	log.Printf("Chunk %v downloaded in %.2f seconds", idx, elapsed)
 	return nil
 }
-
-
 
 func (d *DownloadRequest) MergeDownloads(dirPath, mergeDir string) error {
 	outFile := fmt.Sprintf("%v/%v", mergeDir, d.FileName)
@@ -143,7 +143,6 @@ func (d *DownloadRequest) MergeDownloads(dirPath, mergeDir string) error {
 	fmt.Println("File chunks merged successfully into", outFile)
 	return nil
 }
-
 
 func (d *DownloadRequest) CleanupTmpFiles(tmpPath string) error {
 	log.Println("Starting to clean tmp downloaded files...")

@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/controller"
@@ -54,23 +53,10 @@ func Download(urlPtr *url.URL) {
 		ChunkSize:  chunkSize,
 		TotalSize:  contentLengthInBytes,
 		HttpClient: httpRequestSender,
-		SpeedLimit: 1024 * 10,
+		SpeedLimit: 1024 * 1,
 	}
 
-	tokenBucket := make(chan struct{}, downReq.SpeedLimit)
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			for range downReq.SpeedLimit {
-				select {
-				case tokenBucket <- struct{}{}:
-				default:
-					continue
-				}
-			}
-		}
-	}()
+	downReq.InitTokenBucket()
 
 	byteRangeArray := make([][2]int, workers)
 	byteRangeArray = downReq.SplitIntoChunks()
