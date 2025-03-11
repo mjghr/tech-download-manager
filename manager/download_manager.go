@@ -51,7 +51,10 @@ func Download(urlPtr *url.URL) {
 		ChunkSize:  chunkSize,
 		TotalSize:  contentLengthInBytes,
 		HttpClient: httpRequestSender,
+		SpeedLimit: 1024 * 1,
 	}
+
+	downReq.InitTokenBucket()
 
 	byteRangeArray := make([][2]int, workers)
 	byteRangeArray = downReq.SplitIntoChunks()
