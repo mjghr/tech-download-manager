@@ -5,15 +5,28 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/config"
 )
+
+type Status int
+
+const (
+	NOT_STARTED Status = iota
+	PAUSED
+	FAILED
+	COMPLETED
+	ONGOING
+)
+
 type DownloadController struct {
-	ID         string
-	QueueID    string
+	ID          string
+	QueueID     string
 	Url         string
+	Status      Status
 	FileName    string
 	Chunks      int
 	ChunkSize   int
@@ -21,6 +34,9 @@ type DownloadController struct {
 	HttpClient  *client.HTTPClient
 	SpeedLimit  int
 	TokenBucket chan struct{}
+	PauseChn    chan bool
+	PauseMutex  sync.Mutex
+	ResumeChan  chan bool
 }
 
 func (d *DownloadController) InitTokenBucket() {
@@ -29,7 +45,7 @@ func (d *DownloadController) InitTokenBucket() {
 
 	go func() {
 		for range ticker.C {
-			for i := 0; i < d.SpeedLimit; i++ {
+			for range d.SpeedLimit {
 				select {
 				case d.TokenBucket <- struct{}{}:
 				default:
@@ -88,6 +104,14 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	// Apply speed limit
 	if chunkSpeedLimit > 0 {
 		for {
+			d.PauseMutex.Lock()
+			if d.Status == PAUSED {
+				d.PauseMutex.Unlock()
+				<-d.ResumeChan // Wait until resume is called
+				log.Printf("Resuming chunk %v", idx)
+			} else {
+				d.PauseMutex.Unlock()
+			}
 			<-d.TokenBucket // Wait for a token before reading
 			n, readErr := resp.Body.Read(buffer)
 			if n > 0 {
@@ -155,4 +179,19 @@ func (d *DownloadController) CleanupTmpFiles(tmpPath string) error {
 		}
 	}
 	return nil
+}
+
+func (d *DownloadController) Pause() {
+	d.PauseMutex.Lock()
+	d.Status = PAUSED
+	d.PauseMutex.Unlock()
+	log.Println("Download paused.")
+}
+
+func (d *DownloadController) Resume() {
+	d.PauseMutex.Lock()
+	d.Status = PAUSED
+	d.PauseMutex.Unlock()
+	log.Println("Download resumed.")
+	d.ResumeChan <- true // Notify goroutines to resume
 }
