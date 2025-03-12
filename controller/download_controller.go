@@ -56,7 +56,7 @@ func (d *DownloadController) SplitIntoChunks() [][2]int {
 }
 
 func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
-	// log.Printf("Downloading chunk %v", idx)
+	log.Printf("Downloading chunk %v", idx)
 	method := "GET"
 	headers := map[string]string{
 		"User-Agent": "tech-idm",
@@ -80,38 +80,40 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	}
 	defer file.Close()
 
-	chunkSpeedLimit := d.SpeedLimit
-	buffer := make([]byte, 32*1024) // 32 KB buffer
 	startTime := time.Now()
-	// Apply speed limit
-	if chunkSpeedLimit > 0 {
-		for {
+	totalRead := 0
+	buffer := make([]byte, 32*1024) // 32 KB buffer for efficient reading
 
-			d.checkPause()
-			n, readErr := resp.Body.Read(buffer)
-			if n > 0 {
-				_, writeErr := file.Write(buffer[:n])
-				if writeErr != nil {
-					return fmt.Errorf("failed writing chunk %v: %v", idx, writeErr)
+	for {
+		d.checkPause() // Blocks if paused, ensuring pause time isn't counted
+
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			_, writeErr := file.Write(buffer[:n])
+			if writeErr != nil {
+				return fmt.Errorf("failed writing chunk %v: %v", idx, writeErr)
+			}
+			totalRead += n
+
+			if d.SpeedLimit > 0 {
+
+				expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds
+				elapsed := time.Since(startTime).Seconds()
+				if elapsed < expectedTime {
+					sleepDuration := time.Duration((expectedTime - elapsed) * float64(time.Second))
+					time.Sleep(sleepDuration)
 				}
 			}
-
-			if readErr == io.EOF {
-				break
-			}
-			if readErr != nil {
-				return fmt.Errorf("error reading chunk %v: %v", idx, readErr)
-			}
 		}
-	} else {
-		// No speed limit, normal copy
-		_, err = io.Copy(file, resp.Body)
-		if err != nil {
-			return fmt.Errorf("failed to write chunk %v: %v", idx, err)
+
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return fmt.Errorf("error reading chunk %v: %v", idx, readErr)
 		}
 	}
 
-	// log.Printf("Wrote chunk %v to file", idx)
 	elapsed := time.Since(startTime).Seconds()
 	log.Printf("Chunk %v downloaded in %.2f seconds", idx, elapsed)
 	return nil
