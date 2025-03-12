@@ -22,7 +22,6 @@ func ExtractFileName(urlStr string) (string, error) {
 	}
 	return fileName, nil
 }
-
 func CalculateOptimalWorkersAndChunkSize(fileSize int) (int, int) {
 	availableCores := runtime.NumCPU()
 	if fileSize < 10*1024*1024 {
