@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/controller"
@@ -15,15 +15,13 @@ import (
 	"github.com/mjghr/tech-download-manager/util"
 )
 
-
-type DownloadManager struct {}
-
+type DownloadManager struct{}
 
 func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
 
-	log.Printf("Starting download queue: %s with %d concurrent downloads", queue.ID, queue.ConcurrentDownloadLimit)
+	log.Printf("Starting download queue: %s with %d concurrent downloads limit", queue.ID, queue.ConcurrentDownloadLimit)
 
 	for i := range queue.DownloadControllers {
 		wg.Add(1)
@@ -44,7 +42,7 @@ func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
 	log.Println("All downloads in queue completed")
 }
 
-func (d *DownloadManager) StartDownload(downloadController *controller.DownloadController){
+func (d *DownloadManager) StartDownload(downloadController *controller.DownloadController) {
 	httpRequestSender := client.NewHTTPClient()
 	reqMethod := "HEAD"
 	url := downloadController.Url
@@ -112,7 +110,6 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 	}
 	wg.Wait()
 	fmt.Println("done downloading now merging and removing tmp files", fileName)
-	
 
 	err = downloadController.MergeDownloads(tmpPath, downPath)
 	if err != nil {
@@ -134,7 +131,7 @@ func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.Dow
 		Status:     controller.NOT_STARTED,
 		PauseMutex: sync.Mutex{},
 		ResumeChan: make(chan bool),
-		PauseChan: make(chan bool),
+		PauseChan:  make(chan bool),
 	}
 	return downloadController
 }
