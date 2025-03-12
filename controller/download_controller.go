@@ -175,7 +175,7 @@ func (d *DownloadController) Pause() {
 
 func (d *DownloadController) Resume() {
 	d.PauseMutex.Lock()
-	d.Status = PAUSED
+	d.Status = ONGOING
 	d.PauseMutex.Unlock()
 	log.Println("Download resumed.")
 	d.ResumeChan <- true // Notify goroutines to resume
