@@ -18,6 +18,14 @@ import (
 type DownloadManager struct{}
 
 func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
+
+	for _, dc := range queue.DownloadControllers {
+		if queue.SpeedLimit != 0 {
+			dc.SpeedLimit = queue.SpeedLimit
+		}
+		// Proceed to start the download for dc, e.g., dc.Download(...)
+	}
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
 
@@ -35,7 +43,7 @@ func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
 			d.StartDownload(dc)
 			endTime := time.Now()
 			log.Printf("Download completed for: %s | Duration: %v", dc.FileName, endTime.Sub(startTime))
-		}(&queue.DownloadControllers[i])
+		}(queue.DownloadControllers[i])
 	}
 	wg.Wait()
 
@@ -76,7 +84,7 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 	downloadController.ChunkSize = chunkSize
 	downloadController.TotalSize = contentLengthInBytes
 	downloadController.HttpClient = httpRequestSender
-	downloadController.SpeedLimit = 1024 * 1000
+	// downloadController.SpeedLimit = 1024 * 1000
 	downloadController.Chunks = workers
 	downloadController.FileName = fileName
 
@@ -102,6 +110,7 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 		wg.Add(1)
 		go func(idx int, byteChunk [2]int) {
 			defer wg.Done()
+			fmt.Printf("speedlimit: %v\n", downloadController.SpeedLimit)
 			err := downloadController.Download(idx, byteChunk, tmpPath)
 			if err != nil {
 				log.Fatal(fmt.Sprintf("Failed to download chunk %v", idx), err)
@@ -126,7 +135,13 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 }
 
 func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.DownloadController {
+	speedLimit, err := strconv.Atoi(os.Getenv("SPEED_LIMIT_KB"))
+	if err != nil {
+		log.Fatal("Failed to parse SPEED_LIMIT_KB:", err)
+	}
+	speedLimit = 1024 * speedLimit
 	downloadController := &controller.DownloadController{
+		SpeedLimit: speedLimit,
 		Url:        urlPtr.String(),
 		Status:     controller.NOT_STARTED,
 		PauseMutex: sync.Mutex{},
