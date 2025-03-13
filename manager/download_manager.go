@@ -18,128 +18,161 @@ import (
 type DownloadManager struct{}
 
 func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
+	log.Printf("Initializing download queue %s with %d controllers and speed limit %d bytes/s", queue.ID, len(queue.DownloadControllers), queue.SpeedLimit)
 
-	for _, dc := range queue.DownloadControllers {
+	// Apply queue speed limit to each download controller
+	for i, dc := range queue.DownloadControllers {
 		if queue.SpeedLimit != 0 {
+			log.Printf("Setting speed limit for download controller %d in queue %s to %d bytes/s from queue", i, queue.ID, queue.SpeedLimit)
 			dc.SpeedLimit = queue.SpeedLimit
+		} else {
+			log.Printf("Keeping existing speed limit %d bytes/s for download controller %d in queue %s", dc.SpeedLimit, i, queue.ID)
 		}
-		// Proceed to start the download for dc, e.g., dc.Download(...)
 	}
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
-
-	log.Printf("Starting download queue: %s with %d concurrent downloads limit", queue.ID, queue.ConcurrentDownloadLimit)
+	log.Printf("Starting download queue %s with %d concurrent download limit", queue.ID, queue.ConcurrentDownloadLimit)
 
 	for i := range queue.DownloadControllers {
 		wg.Add(1)
 		sem <- struct{}{}
-
-		go func(dc *controller.DownloadController) {
+		go func(dc *controller.DownloadController, idx int) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
+			log.Printf("Starting goroutine for download controller %d: %s", idx, dc.FileName)
 			startTime := time.Now()
-			d.StartDownload(dc)
+			err := d.StartDownload(dc)
+			if err != nil {
+				log.Printf("Download failed for %s: %v", dc.FileName, err)
+				dc.Status = controller.FAILED
+			} else {
+				dc.Status = controller.COMPLETED
+			}
 			endTime := time.Now()
-			log.Printf("Download completed for: %s | Duration: %v", dc.FileName, endTime.Sub(startTime))
-		}(queue.DownloadControllers[i])
+			log.Printf("Download completed for %s | Duration: %v | Status: %v", dc.FileName, endTime.Sub(startTime), dc.Status)
+		}(queue.DownloadControllers[i], i)
 	}
 	wg.Wait()
 
-	log.Println("All downloads in queue completed")
+	log.Printf("All downloads in queue %s completed", queue.ID)
 }
 
-func (d *DownloadManager) StartDownload(downloadController *controller.DownloadController) {
+func (d *DownloadManager) StartDownload(downloadController *controller.DownloadController) error {
+	log.Printf("Preparing to start download for URL: %s", downloadController.Url)
 	httpRequestSender := client.NewHTTPClient()
 	reqMethod := "HEAD"
 	url := downloadController.Url
 	headers := map[string]string{
-		"user_agent": "tech-idm",
+		"User-Agent": "tech-idm",
 	}
+
+	log.Printf("Sending HEAD request to determine file details for %s", url)
 	response, err := httpRequestSender.SendRequest(reqMethod, url, headers)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Failed to send HEAD request for %s: %v", url, err)
+		return fmt.Errorf("failed to send HEAD request: %w", err)
 	}
-
-	// acceptRangers := response.Header.Get("Accept-Ranges")
-	// log.Println(acceptRangers)
+	defer response.Body.Close()
 
 	contentLength := response.Header.Get("Content-Length")
-	// log.Println("Content-Length:", contentLength)
+	log.Printf("Received Content-Length: %s for %s", contentLength, url)
 	contentLengthInBytes, err := strconv.Atoi(contentLength)
-	if err != nil {
-		log.Fatal("empty, can't download the file", err)
+	if err != nil || contentLengthInBytes <= 0 {
+		log.Printf("Invalid or empty Content-Length for %s: %v", url, err)
+		return fmt.Errorf("invalid Content-Length '%s': %w", contentLength, err)
 	}
-	// log.Println("Content-Length:", contentLengthInBytes)
+	log.Printf("Parsed Content-Length: %d bytes for %s", contentLengthInBytes, url)
+
 	workers, chunkSize := util.CalculateOptimalWorkersAndChunkSize(contentLengthInBytes)
-	// log.Println("Optimal Workers:", workers)
-	// log.Println("Optimal Chunk Size:", chunkSize)
+	log.Printf("Calculated %d workers with chunk size %d bytes for %s", workers, chunkSize, url)
+
 	fileName, err := util.ExtractFileName(url)
 	if err != nil {
-		log.Fatal("Error while extracting file name...")
+		log.Printf("Failed to extract filename from %s: %v", url, err)
+		return fmt.Errorf("failed to extract filename: %w", err)
 	}
+	log.Printf("Extracted filename: %s", fileName)
 
-	// log.Println("Filename extracted: ", fileName)
+	// Initialize download controller fields
 	downloadController.ChunkSize = chunkSize
 	downloadController.TotalSize = contentLengthInBytes
 	downloadController.HttpClient = httpRequestSender
-	// downloadController.SpeedLimit = 1024 * 1000
 	downloadController.Chunks = workers
 	downloadController.FileName = fileName
+	downloadController.Status = controller.ONGOING
+	log.Printf("Initialized download controller for %s with %d chunks and speed limit %d bytes/s", fileName, workers, downloadController.SpeedLimit)
 
-	byteRangeArray := make([][2]int, workers)
-	byteRangeArray = downloadController.SplitIntoChunks()
-	// fmt.Println(byteRangeArray)
+	byteRangeArray := downloadController.SplitIntoChunks()
+	log.Printf("Generated byte ranges for %d chunks for %s", len(byteRangeArray), fileName)
 
-	var tmpPath, downPath string
-	tmpPath = util.GiveDefaultTempPath()
-	downPath = util.GiveDefaultSavePath()
+	tmpPath := util.GiveDefaultTempPath()
+	downPath := util.GiveDefaultSavePath()
+	log.Printf("Using temp path: %s and download path: %s", tmpPath, downPath)
 
 	// Create directories if they don't exist
 	if err := os.MkdirAll(tmpPath, 0755); err != nil {
-		log.Fatal("Failed to create tmp directory:", err)
+		log.Printf("Failed to create temp directory %s: %v", tmpPath, err)
+		return fmt.Errorf("failed to create temp directory %s: %w", tmpPath, err)
 	}
 	if err := os.MkdirAll(downPath, 0755); err != nil {
-		log.Fatal("Failed to create download directory:", err)
+		log.Printf("Failed to create download directory %s: %v", downPath, err)
+		return fmt.Errorf("failed to create download directory %s: %w", downPath, err)
 	}
+	log.Printf("Successfully ensured directories exist: %s and %s", tmpPath, downPath)
 
-	fmt.Println("started downloading", fileName)
+	fmt.Printf("Started downloading %s\n", fileName)
 	var wg sync.WaitGroup
 	for idx, byteChunk := range byteRangeArray {
 		wg.Add(1)
 		go func(idx int, byteChunk [2]int) {
 			defer wg.Done()
-			fmt.Printf("speedlimit: %v\n", downloadController.SpeedLimit)
+			log.Printf("Starting download of chunk %d for %s (bytes %d-%d)", idx, fileName, byteChunk[0], byteChunk[1])
 			err := downloadController.Download(idx, byteChunk, tmpPath)
 			if err != nil {
-				log.Fatal(fmt.Sprintf("Failed to download chunk %v", idx), err)
+				log.Printf("Failed to download chunk %d for %s: %v", idx, fileName, err)
+				downloadController.Status = controller.FAILED
 			}
 		}(idx, byteChunk)
 	}
 	wg.Wait()
-	fmt.Println("done downloading now merging and removing tmp files", fileName)
 
+	if downloadController.Status == controller.FAILED {
+		return fmt.Errorf("one or more chunks failed to download for %s", fileName)
+	}
+
+	fmt.Printf("Done downloading, now merging and removing temp files for %s\n", fileName)
+	log.Printf("Merging downloads for %s from %s to %s", fileName, tmpPath, downPath)
 	err = downloadController.MergeDownloads(tmpPath, downPath)
 	if err != nil {
-		log.Fatal("Failed merging tmp downloaded files...", err)
+		log.Printf("Failed to merge downloads for %s: %v", fileName, err)
+		return fmt.Errorf("failed to merge downloads: %w", err)
 	}
 
+	log.Printf("Cleaning up temporary files for %s in %s", fileName, tmpPath)
 	err = downloadController.CleanupTmpFiles(tmpPath)
 	if err != nil {
-		log.Fatal("Failed cleaning up tmp downloaded files...", err)
+		log.Printf("Failed to clean up temporary files for %s: %v", fileName, err)
+		return fmt.Errorf("failed to clean up temporary files: %w", err)
 	}
 
-	log.Printf("file generated: %v\n\n", downloadController.FileName)
-
+	log.Printf("File successfully generated: %s in %s", fileName, downPath)
+	return nil
 }
 
 func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.DownloadController {
-	speedLimit, err := strconv.Atoi(os.Getenv("SPEED_LIMIT_KB"))
+	log.Printf("Creating new download controller for URL: %s", urlPtr.String())
+	speedLimitStr := os.Getenv("SPEED_LIMIT_KB")
+	speedLimit, err := strconv.Atoi(speedLimitStr)
 	if err != nil {
-		log.Fatal("Failed to parse SPEED_LIMIT_KB:", err)
+		log.Printf("Invalid SPEED_LIMIT_KB value '%s', defaulting to 0: %v", speedLimitStr, err)
+		speedLimit = 0
+	} else {
+		speedLimit = speedLimit * 1024 // Convert KB/s to bytes/s
+		log.Printf("Parsed SPEED_LIMIT_KB: %d KB/s, converted to %d bytes/s", speedLimit/1024, speedLimit)
 	}
-	speedLimit = 1024 * speedLimit
+
 	downloadController := &controller.DownloadController{
 		SpeedLimit: speedLimit,
 		Url:        urlPtr.String(),
@@ -147,6 +180,8 @@ func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.Dow
 		PauseMutex: sync.Mutex{},
 		ResumeChan: make(chan bool),
 		PauseChan:  make(chan bool),
+		ID:         fmt.Sprintf("dc-%d", time.Now().UnixNano()), // Unique ID for logging
 	}
+	log.Printf("Created download controller %s with speed limit %d bytes/s", downloadController.ID, speedLimit)
 	return downloadController
 }
