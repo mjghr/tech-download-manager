@@ -24,7 +24,7 @@ type Queue struct {
 	ConcurrentDownloadLimit int
 	StartTime               time.Time
 	EndTime                 time.Time
-	DownloadControllers     []controller.DownloadController
+	DownloadControllers     []*controller.DownloadController
 }
 
 type DownloadRequest struct {
