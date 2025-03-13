@@ -39,6 +39,7 @@ type DownloadController struct {
 }
 
 func (d *DownloadController) SplitIntoChunks() [][2]int {
+	log.Printf("Starting to split download %s into %d chunks (total size: %d bytes)", d.ID, d.Chunks, d.TotalSize)
 	arr := make([][2]int, d.Chunks)
 	for i := range d.Chunks {
 		if i == 0 {
@@ -51,32 +52,39 @@ func (d *DownloadController) SplitIntoChunks() [][2]int {
 			arr[i][0] = arr[i-1][1] + 1
 			arr[i][1] = arr[i][0] + d.ChunkSize
 		}
+		log.Printf("Created chunk %d for %s: bytes %d-%d", i, d.ID, arr[i][0], arr[i][1])
 	}
+	log.Printf("Successfully split %s into %d chunks", d.ID, d.Chunks)
 	return arr
 }
 
 func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
-	log.Printf("Downloading chunk %v", idx)
+	log.Printf("Starting download of chunk %d for %s (bytes %d-%d, speed limit: %d bytes/s)", idx, d.FileName, byteChunk[0], byteChunk[1], d.SpeedLimit)
 	method := "GET"
 	headers := map[string]string{
 		"User-Agent": "tech-idm",
-		"Range":      fmt.Sprintf("bytes=%v-%v", byteChunk[0], byteChunk[1]),
+		"Range":      fmt.Sprintf("bytes=%d-%d", byteChunk[0], byteChunk[1]),
 	}
 
+	log.Printf("Sending HTTP request for chunk %d of %s", idx, d.FileName)
 	resp, err := d.HttpClient.SendRequest(method, d.Url, headers)
 	if err != nil {
-		return fmt.Errorf("chunk fail %v", err)
+		log.Printf("Failed to send request for chunk %d of %s: %v", idx, d.FileName, err)
+		return fmt.Errorf("failed to send request for chunk %d: %w", idx, err)
 	}
 	if resp.StatusCode > 299 {
-		return fmt.Errorf("can't process, response is %v", resp.StatusCode)
+		log.Printf("Received invalid response for chunk %d of %s: status code %d", idx, d.FileName, resp.StatusCode)
+		return fmt.Errorf("invalid response for chunk %d: status code %d", idx, resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
 	// Define chunk file
-	fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+	fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+	log.Printf("Creating temporary file for chunk %d: %s", idx, fileName)
 	file, err := os.Create(fileName)
 	if err != nil {
-		return fmt.Errorf("can't create file %v", fileName)
+		log.Printf("Failed to create file %s for chunk %d: %v", fileName, idx, err)
+		return fmt.Errorf("failed to create file %s for chunk %d: %w", fileName, idx, err)
 	}
 	defer file.Close()
 
@@ -89,80 +97,97 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 
 		n, readErr := resp.Body.Read(buffer)
 		if n > 0 {
+			log.Printf("Read %d bytes for chunk %d of %s", n, idx, d.FileName)
 			_, writeErr := file.Write(buffer[:n])
 			if writeErr != nil {
-				return fmt.Errorf("failed writing chunk %v: %v", idx, writeErr)
+				log.Printf("Failed to write %d bytes to file %s for chunk %d: %v", n, fileName, idx, writeErr)
+				return fmt.Errorf("failed writing %d bytes to %s for chunk %d: %w", n, fileName, idx, writeErr)
 			}
 			totalRead += n
+			log.Printf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, totalRead)
 
 			if d.SpeedLimit > 0 {
-
 				expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds
 				elapsed := time.Since(startTime).Seconds()
 				if elapsed < expectedTime {
 					sleepDuration := time.Duration((expectedTime - elapsed) * float64(time.Second))
+					log.Printf("Chunk %d of %s: sleeping for %.2f seconds to respect speed limit of %d bytes/s", idx, d.FileName, sleepDuration.Seconds(), d.SpeedLimit)
 					time.Sleep(sleepDuration)
 				}
 			}
 		}
 
 		if readErr == io.EOF {
+			log.Printf("Finished reading chunk %d of %s: reached EOF", idx, d.FileName)
 			break
 		}
 		if readErr != nil {
-			return fmt.Errorf("error reading chunk %v: %v", idx, readErr)
+			log.Printf("Error reading chunk %d of %s: %v", idx, d.FileName, readErr)
+			return fmt.Errorf("error reading chunk %d of %s: %w", idx, d.FileName, readErr)
 		}
 	}
 
 	elapsed := time.Since(startTime).Seconds()
-	log.Printf("Chunk %v downloaded in %.2f seconds", idx, elapsed)
+	log.Printf("Completed download of chunk %d for %s in %.2f seconds (total bytes: %d)", idx, d.FileName, elapsed, totalRead)
 	return nil
 }
 
 func (d *DownloadController) MergeDownloads(dirPath, mergeDir string) error {
-	outFile := fmt.Sprintf("%v/%v", mergeDir, d.FileName)
+	outFile := fmt.Sprintf("%s/%s", mergeDir, d.FileName)
+	log.Printf("Starting to merge chunks into final file: %s", outFile)
 	out, err := os.Create(outFile)
 	if err != nil {
-		return fmt.Errorf("failed to create output file: %v", err)
+		log.Printf("Failed to create output file %s: %v", outFile, err)
+		return fmt.Errorf("failed to create output file %s: %w", outFile, err)
 	}
 	defer out.Close()
 
 	for idx := range d.Chunks {
-		fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", dirPath, config.TMP_FILE_PREFIX, d.FileName, idx)
-
+		fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", dirPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+		log.Printf("Opening chunk %d file for merging: %s", idx, fileName)
 		in, err := os.Open(fileName)
 		if err != nil {
-			return fmt.Errorf("failed to open chunk file %s: %v", fileName, err)
+			log.Printf("Failed to open chunk file %s: %v", fileName, err)
+			return fmt.Errorf("failed to open chunk file %s: %w", fileName, err)
 		}
-		defer in.Close()
 
+		log.Printf("Merging chunk %d from %s into %s", idx, fileName, outFile)
 		_, err = io.Copy(out, in)
+		in.Close() // Close immediately after copying
 		if err != nil {
-			return fmt.Errorf("failed to merge chunk file %s: %v", fileName, err)
+			log.Printf("Failed to merge chunk file %s into %s: %v", fileName, outFile, err)
+			return fmt.Errorf("failed to merge chunk file %s: %w", fileName, err)
 		}
+		log.Printf("Successfully merged chunk %d from %s", idx, fileName)
 	}
 
-	// fmt.Println("File chunks merged successfully into", outFile)
+	log.Printf("Successfully merged all chunks into %s", outFile)
 	return nil
 }
 
 func (d *DownloadController) CleanupTmpFiles(tmpPath string) error {
-	// log.Println("Starting to clean tmp downloaded files...")
+	log.Printf("Starting cleanup of temporary files for %s", d.FileName)
 	for idx := range d.Chunks {
-		fileName := fmt.Sprintf("%v/%v-%v-%v.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+		fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+		log.Printf("Attempting to remove temporary file: %s", fileName)
 		err := os.Remove(fileName)
 		if err != nil {
-			return fmt.Errorf("failed to remove chunk file %s: %v", fileName, err)
+			log.Printf("Failed to remove temporary file %s: %v", fileName, err)
+			return fmt.Errorf("failed to remove temporary file %s: %w", fileName, err)
 		}
+		log.Printf("Successfully removed temporary file %s", fileName)
 	}
+	log.Printf("Completed cleanup of all temporary files for %s", d.FileName)
 	return nil
 }
 
 func (d *DownloadController) checkPause() {
 	d.PauseMutex.Lock()
 	if d.Status == PAUSED {
+		log.Printf("Download %s is paused, waiting for resume signal", d.ID)
 		d.PauseMutex.Unlock()
 		<-d.ResumeChan
+		log.Printf("Received resume signal for download %s", d.ID)
 	} else {
 		d.PauseMutex.Unlock()
 	}
@@ -170,15 +195,23 @@ func (d *DownloadController) checkPause() {
 
 func (d *DownloadController) Pause() {
 	d.PauseMutex.Lock()
-	d.Status = PAUSED
+	if d.Status == ONGOING {
+		d.Status = PAUSED
+		log.Printf("Download %s has been paused", d.ID)
+	} else {
+		log.Printf("Download %s is already paused or not ongoing, no action taken", d.ID)
+	}
 	d.PauseMutex.Unlock()
-	log.Println("Download paused.")
 }
 
 func (d *DownloadController) Resume() {
 	d.PauseMutex.Lock()
-	d.Status = ONGOING
+	if d.Status == PAUSED {
+		d.Status = ONGOING
+		log.Printf("Download %s has been resumed", d.ID)
+		d.ResumeChan <- true // Notify goroutines to resume
+	} else {
+		log.Printf("Download %s is not paused, no action taken", d.ID)
+	}
 	d.PauseMutex.Unlock()
-	log.Println("Download resumed.")
-	d.ResumeChan <- true // Notify goroutines to resume
 }
