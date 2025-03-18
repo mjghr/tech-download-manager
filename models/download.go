@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
-	"github.com/mjghr/tech-download-manager/controller"
 )
 
 type Status int
@@ -24,7 +23,6 @@ type Queue struct {
 	ConcurrentDownloadLimit int
 	StartTime               time.Time
 	EndTime                 time.Time
-	DownloadControllers     []*controller.DownloadController
 }
 
 type DownloadRequest struct {
