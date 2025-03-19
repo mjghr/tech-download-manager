@@ -11,28 +11,27 @@ import (
 
 	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/controller"
-	"github.com/mjghr/tech-download-manager/models"
 	"github.com/mjghr/tech-download-manager/util"
 )
 
 type DownloadManager struct{}
 
-func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
-	log.Printf("Initializing download queue %s with %d controllers and speed limit %d bytes/s", queue.ID, len(queue.DownloadControllers), queue.SpeedLimit)
+func (d *DownloadManager) DownloadQueue(queue *controller.QueueController) {
+	log.Printf("Initializing download queue %s with %d controllers and speed limit %d bytes/s", queue.QueueID, len(queue.DownloadControllers), queue.SpeedLimit)
 
 	// Apply queue speed limit to each download controller
 	for i, dc := range queue.DownloadControllers {
 		if queue.SpeedLimit != 0 {
-			log.Printf("Setting speed limit for download controller %d in queue %s to %d bytes/s from queue", i, queue.ID, queue.SpeedLimit)
+			log.Printf("Setting speed limit for download controller %d in queue %s to %d bytes/s from queue", i, queue.QueueID, queue.SpeedLimit)
 			dc.SpeedLimit = queue.SpeedLimit
 		} else {
-			log.Printf("Keeping existing speed limit %d bytes/s for download controller %d in queue %s", dc.SpeedLimit, i, queue.ID)
+			log.Printf("Keeping existing speed limit %d bytes/s for download controller %d in queue %s", dc.SpeedLimit, i, queue.QueueID)
 		}
 	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
-	log.Printf("Starting download queue %s with %d concurrent download limit", queue.ID, queue.ConcurrentDownloadLimit)
+	sem := make(chan struct{}, queue.ConcurrenDownloadtLimit) // Limit concurrent downloads
+	log.Printf("Starting download queue %s with %d concurrent download limit", queue.QueueID, queue.ConcurrenDownloadtLimit)
 
 	for i := range queue.DownloadControllers {
 		wg.Add(1)
@@ -56,7 +55,7 @@ func (d *DownloadManager) DownloadQueue(queue *models.Queue) {
 	}
 	wg.Wait()
 
-	log.Printf("All downloads in queue %s completed", queue.ID)
+	log.Printf("All downloads in queue %s completed", queue.QueueID)
 }
 
 func (d *DownloadManager) StartDownload(downloadController *controller.DownloadController) error {
@@ -163,6 +162,37 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 
 func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.DownloadController {
 	log.Printf("Creating new download controller for URL: %s", urlPtr.String())
+
+	// Initialize HTTP client early to use for HEAD request
+	httpClient := client.NewHTTPClient()
+
+	// Get file details with HEAD request
+	resp, err := httpClient.SendRequest("HEAD", urlPtr.String(), map[string]string{
+		"User-Agent": "tech-idm",
+	})
+	if err != nil {
+		log.Printf("Warning: Failed to get file size: %v", err)
+		return &controller.DownloadController{
+			Status: controller.FAILED,
+			Url:    urlPtr.String(),
+			ID:     fmt.Sprintf("dc-%d", time.Now().UnixNano()),
+		}
+	}
+	defer resp.Body.Close()
+
+	// Parse Content-Length
+	contentLength := resp.Header.Get("Content-Length")
+	totalSize, err := strconv.Atoi(contentLength)
+	if err != nil || totalSize <= 0 {
+		log.Printf("Warning: Invalid Content-Length '%s': %v", contentLength, err)
+		return &controller.DownloadController{
+			Status: controller.FAILED,
+			Url:    urlPtr.String(),
+			ID:     fmt.Sprintf("dc-%d", time.Now().UnixNano()),
+		}
+	}
+
+	// Get speed limit from environment
 	speedLimitStr := os.Getenv("SPEED_LIMIT_KB")
 	speedLimit, err := strconv.Atoi(speedLimitStr)
 	if err != nil {
@@ -170,18 +200,41 @@ func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.Dow
 		speedLimit = 0
 	} else {
 		speedLimit = speedLimit * 1024 // Convert KB/s to bytes/s
-		log.Printf("Parsed SPEED_LIMIT_KB: %d KB/s, converted to %d bytes/s", speedLimit/1024, speedLimit)
 	}
 
+	// Extract filename from URL
+	fileName, err := util.ExtractFileName(urlPtr.String())
+	if err != nil {
+		log.Printf("Warning: Failed to extract filename: %v", err)
+		fileName = fmt.Sprintf("download-%d", time.Now().UnixNano())
+	}
+
+	// Calculate optimal chunks
+	workers, chunkSize := util.CalculateOptimalWorkersAndChunkSize(totalSize)
+
 	downloadController := &controller.DownloadController{
-		SpeedLimit: speedLimit,
+		ID:         fmt.Sprintf("dc-%d", time.Now().UnixNano()),
 		Url:        urlPtr.String(),
 		Status:     controller.NOT_STARTED,
-		PauseMutex: sync.Mutex{},
+		FileName:   fileName,
+		Chunks:     workers,
+		ChunkSize:  chunkSize,
+		TotalSize:  totalSize,
+		HttpClient: httpClient,
+		SpeedLimit: speedLimit,
+		Mutex:      sync.Mutex{},
 		ResumeChan: make(chan bool),
 		PauseChan:  make(chan bool),
-		ID:         fmt.Sprintf("dc-%d", time.Now().UnixNano()), // Unique ID for logging
 	}
-	log.Printf("Created download controller %s with speed limit %d bytes/s", downloadController.ID, speedLimit)
+
+	log.Printf("Created download controller %s for file %s: size=%d bytes, chunks=%d, chunk_size=%d bytes, speed_limit=%d bytes/s",
+		downloadController.ID,
+		downloadController.FileName,
+		downloadController.TotalSize,
+		downloadController.Chunks,
+		downloadController.ChunkSize,
+		downloadController.SpeedLimit,
+	)
+
 	return downloadController
 }

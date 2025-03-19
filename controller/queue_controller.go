@@ -10,33 +10,27 @@ import (
 
 // QueueController manages a download queue with features like pause, resume, and concurrent download limits
 type QueueController struct {
-	QueueID             string
-	SaveDestination     string
-	SpeedLimit          int
-	ConcurrentLimit     int
-	StartTime           time.Time
-	EndTime             time.Time
-	DownloadControllers []*DownloadController
-	ActiveDownloads     int
-	TempPath            string
-	SavePath            string
-	mutex               sync.Mutex
-	downloadInProgress  map[string]bool
-	wg                  sync.WaitGroup
+	QueueID                 string
+	SpeedLimit              int
+	ConcurrenDownloadtLimit int
+	StartTime               time.Time
+	EndTime                 time.Time
+	DownloadControllers     []*DownloadController
+	TempPath                string
+	SavePath                string
+	mutex                   sync.Mutex
+	wg                      sync.WaitGroup
 }
 
 // NewQueueController creates a new queue controller
 func NewQueueController(queueID, tempPath, savePath string, concurrentLimit, speedLimit int) *QueueController {
 	return &QueueController{
-		QueueID:             queueID,
-		ConcurrentLimit:     concurrentLimit,
-		SpeedLimit:          speedLimit,
-		ActiveDownloads:     0,
-		TempPath:            tempPath,
-		SavePath:            savePath,
-		SaveDestination:     savePath,
-		DownloadControllers: make([]*DownloadController, 0),
-		downloadInProgress:  make(map[string]bool),
+		QueueID:                 queueID,
+		ConcurrenDownloadtLimit: concurrentLimit,
+		SpeedLimit:              speedLimit,
+		TempPath:                tempPath,
+		SavePath:                savePath,
+		DownloadControllers:     make([]*DownloadController, 0),
 	}
 }
 
@@ -68,6 +62,12 @@ func (qc *QueueController) Start() error {
 func (qc *QueueController) processDownload(dc *DownloadController) {
 	defer qc.wg.Done()
 
+	// Skip if already completed or failed
+	if dc.GetStatus() == COMPLETED || dc.GetStatus() == FAILED {
+		log.Printf("Download %s skipped: already %v", dc.ID, dc.GetStatus())
+		return
+	}
+
 	// Wait for a slot to become available
 	qc.waitForDownloadSlot(dc)
 
@@ -85,20 +85,6 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 		return
 	}
 
-	// Mark this download as in progress
-	qc.mutex.Lock()
-	qc.downloadInProgress[dc.ID] = true
-	qc.ActiveDownloads++
-	qc.mutex.Unlock()
-
-	// Ensure we decrement active downloads when done
-	defer func() {
-		qc.mutex.Lock()
-		qc.ActiveDownloads--
-		delete(qc.downloadInProgress, dc.ID)
-		qc.mutex.Unlock()
-	}()
-
 	// Initialize required channels for the download controller
 	dc.PauseChan = make(chan bool)
 	dc.ResumeChan = make(chan bool)
@@ -108,8 +94,9 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 		dc.SpeedLimit = qc.SpeedLimit
 	}
 
+	// Mark this download as in progress
+	dc.SetStatus(ONGOING)
 	log.Printf("Starting download %s in queue %s", dc.ID, qc.QueueID)
-	dc.Status = ONGOING
 
 	// Split file into chunks
 	chunks := dc.SplitIntoChunks()
@@ -122,11 +109,15 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 		chunkWg.Add(1)
 		go func(idx int, byteChunk [2]int) {
 			defer chunkWg.Done()
+			if dc.GetStatus() != ONGOING { // Check status before proceeding
+				log.Printf("Chunk %d for %s skipped: download not ONGOING", idx, dc.ID)
+				return
+			}
 			err := dc.Download(idx, byteChunk, qc.TempPath)
 			if err != nil {
 				log.Printf("Error downloading chunk %d for %s: %v", idx, dc.FileName, err)
 				downloadErr = err
-				dc.Status = FAILED
+				dc.SetStatus(FAILED)
 			}
 		}(i, chunk)
 	}
@@ -169,7 +160,13 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 func (qc *QueueController) waitForDownloadSlot(dc *DownloadController) {
 	for {
 		qc.mutex.Lock()
-		if qc.ActiveDownloads < qc.ConcurrentLimit {
+		activeCount := 0
+		for _, download := range qc.DownloadControllers {
+			if download.Status == ONGOING {
+				activeCount++
+			}
+		}
+		if activeCount < qc.ConcurrenDownloadtLimit {
 			qc.mutex.Unlock()
 			return
 		}
@@ -258,7 +255,7 @@ func (qc *QueueController) SetConcurrentLimit(limit int) {
 	qc.mutex.Lock()
 	defer qc.mutex.Unlock()
 
-	qc.ConcurrentLimit = limit
+	qc.ConcurrenDownloadtLimit = limit
 	log.Printf("Updated concurrent download limit to %d for queue %s", limit, qc.QueueID)
 }
 
@@ -273,24 +270,25 @@ func (qc *QueueController) SetTimeWindow(startTime, endTime time.Time) {
 		qc.QueueID, startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
 }
 
-// SetPaths updates the temporary and save paths
 func (qc *QueueController) SetPaths(tempPath, savePath string) error {
-	// Check if the directories exist or can be created
+	qc.mutex.Lock()
+	defer qc.mutex.Unlock()
+
+	for _, dc := range qc.DownloadControllers {
+		if dc.GetStatus() == ONGOING {
+			return fmt.Errorf("cannot change paths while downloads are ongoing")
+		}
+	}
+
 	if err := os.MkdirAll(tempPath, 0755); err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-
 	if err := os.MkdirAll(savePath, 0755); err != nil {
 		return fmt.Errorf("failed to create save directory: %w", err)
 	}
 
-	qc.mutex.Lock()
-	defer qc.mutex.Unlock()
-
 	qc.TempPath = tempPath
 	qc.SavePath = savePath
-	qc.SaveDestination = savePath
-
 	log.Printf("Updated paths for queue %s: temp=%s, save=%s", qc.QueueID, tempPath, savePath)
 	return nil
 }

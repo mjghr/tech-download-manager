@@ -34,26 +34,36 @@ type DownloadController struct {
 	HttpClient *client.HTTPClient
 	SpeedLimit int
 	PauseChan  chan bool
-	PauseMutex sync.Mutex
+	Mutex      sync.Mutex
 	ResumeChan chan bool
 }
 
 func (d *DownloadController) SplitIntoChunks() [][2]int {
 	log.Printf("Starting to split download %s into %d chunks (total size: %d bytes)", d.ID, d.Chunks, d.TotalSize)
 	arr := make([][2]int, d.Chunks)
-	for i := range d.Chunks {
-		if i == 0 {
-			arr[i][0] = 0
-			arr[i][1] = d.ChunkSize
-		} else if i == d.Chunks-1 {
-			arr[i][0] = arr[i-1][1] + 1
-			arr[i][1] = d.TotalSize - 1
-		} else {
-			arr[i][0] = arr[i-1][1] + 1
-			arr[i][1] = arr[i][0] + d.ChunkSize
-		}
-		log.Printf("Created chunk %d for %s: bytes %d-%d", i, d.ID, arr[i][0], arr[i][1])
+
+	if d.TotalSize <= 0 {
+		log.Printf("Error: Total size is %d, cannot split into chunks", d.TotalSize)
+		return arr
 	}
+
+	chunkSize := d.TotalSize / d.Chunks
+	remainder := d.TotalSize % d.Chunks
+
+	var start, end int
+	for i := 0; i < d.Chunks; i++ {
+		start = i * chunkSize
+		end = start + chunkSize - 1
+
+		// Add remainder to last chunk
+		if i == d.Chunks-1 {
+			end += remainder
+		}
+
+		arr[i] = [2]int{start, end}
+		log.Printf("Created chunk %d for %s: bytes %d-%d", i, d.ID, start, end)
+	}
+
 	log.Printf("Successfully split %s into %d chunks", d.ID, d.Chunks)
 	return arr
 }
@@ -182,30 +192,30 @@ func (d *DownloadController) CleanupTmpFiles(tmpPath string) error {
 }
 
 func (d *DownloadController) checkPause() {
-	d.PauseMutex.Lock()
+	d.Mutex.Lock()
 	if d.Status == PAUSED {
 		log.Printf("Download %s is paused, waiting for resume signal", d.ID)
-		d.PauseMutex.Unlock()
+		d.Mutex.Unlock()
 		<-d.ResumeChan
 		log.Printf("Received resume signal for download %s", d.ID)
 	} else {
-		d.PauseMutex.Unlock()
+		d.Mutex.Unlock()
 	}
 }
 
 func (d *DownloadController) Pause() {
-	d.PauseMutex.Lock()
+	d.Mutex.Lock()
 	if d.Status == ONGOING {
 		d.Status = PAUSED
 		log.Printf("Download %s has been paused", d.ID)
 	} else {
 		log.Printf("Download %s is already paused or not ongoing, no action taken", d.ID)
 	}
-	d.PauseMutex.Unlock()
+	d.Mutex.Unlock()
 }
 
 func (d *DownloadController) Resume() {
-	d.PauseMutex.Lock()
+	d.Mutex.Lock()
 	if d.Status == PAUSED {
 		d.Status = ONGOING
 		log.Printf("Download %s has been resumed", d.ID)
@@ -213,5 +223,17 @@ func (d *DownloadController) Resume() {
 	} else {
 		log.Printf("Download %s is not paused, no action taken", d.ID)
 	}
-	d.PauseMutex.Unlock()
+	d.Mutex.Unlock()
+}
+
+func (dc *DownloadController) GetStatus() Status {
+	dc.Mutex.Lock()
+	defer dc.Mutex.Unlock()
+	return dc.Status
+}
+
+func (dc *DownloadController) SetStatus(newStatus Status) {
+	dc.Mutex.Lock()
+	defer dc.Mutex.Unlock()
+	dc.Status = newStatus
 }

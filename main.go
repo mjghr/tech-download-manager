@@ -53,34 +53,63 @@ func main() {
 	queueCtrl.AddDownload(dc2)
 
 	// Set a time window for downloads (optional)
-	// This sets the downloads to be allowed now and for the next hour
 	now := time.Now()
 	oneHourLater := now.Add(1 * time.Hour)
 	queueCtrl.SetTimeWindow(now, oneHourLater)
 
-	// Start the queue processing in a goroutine
+	// Start monitoring goroutine
+	go monitorDownloads(queueCtrl)
+
+	// Start the queue processing
 	go func() {
-		err := queueCtrl.Start()
-		if err != nil {
+		if err := queueCtrl.Start(); err != nil {
 			log.Printf("Error processing queue: %v", err)
 		}
 	}()
 
 	// Example: Pause all downloads after 2 seconds
 	time.Sleep(2 * time.Second)
-	fmt.Println("Pausing all downloads...")
+	fmt.Println("\nPausing all downloads...")
 	queueCtrl.PauseAll()
 
 	// Wait 3 seconds and resume
 	time.Sleep(3 * time.Second)
-	fmt.Println("Resuming all downloads...")
+	fmt.Println("\nResuming all downloads...")
 	queueCtrl.ResumeAll()
 
-	// Wait for user input to keep program running
-	fmt.Println("\nDownloads are being processed in the background.")
-	fmt.Println("Press Enter to exit.")
+	// Wait for user input
+	fmt.Println("\nPress Enter to exit.")
 	reader := bufio.NewReader(os.Stdin)
 	reader.ReadString('\n')
+}
+
+func monitorDownloads(qc *controller.QueueController) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		fmt.Print("\033[H\033[2J") // Clear screen
+		fmt.Println("Download Status:")
+		fmt.Println("---------------")
+
+		for _, dc := range qc.DownloadControllers {
+			status := dc.GetStatus()
+			var statusStr string
+			switch status {
+			case controller.NOT_STARTED:
+				statusStr = "Not Started"
+			case controller.PAUSED:
+				statusStr = "Paused"
+			case controller.FAILED:
+				statusStr = "Failed"
+			case controller.COMPLETED:
+				statusStr = "Completed"
+			case controller.ONGOING:
+				statusStr = "Downloading"
+			}
+			fmt.Printf("File: %s\nStatus: %s\n---------------\n", dc.FileName, statusStr)
+		}
+	}
 }
 
 func getUrlFromUser() (*url.URL, error) {
@@ -92,6 +121,5 @@ func getUrlFromUser() (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return parsedURL, nil
 }

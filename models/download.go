@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/mjghr/tech-download-manager/client"
 )
 
@@ -15,15 +13,6 @@ const (
 	COMPLETED
 	ONGOING
 )
-
-type Queue struct {
-	ID                      string
-	SaveDestination         string
-	SpeedLimit              int
-	ConcurrentDownloadLimit int
-	StartTime               time.Time
-	EndTime                 time.Time
-}
 
 type DownloadRequest struct {
 	Url        string
