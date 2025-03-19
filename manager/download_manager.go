@@ -224,8 +224,9 @@ func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.Dow
 	// Calculate optimal chunks
 	workers, chunkSize := util.CalculateOptimalWorkersAndChunkSize(totalSize)
 	downloadController.Chunks = downloadController.SplitIntoChunks(workers, chunkSize)
+	downloadController.CompletedBytes = make([]int, len(downloadController.Chunks))
 
-	log.Printf("Created download controller %s for file %s: size=%d bytes, chunks=%d, chunk_size=%d bytes, speed_limit=%d bytes/s",
+	log.Printf("Created download controller %s for file %s: size=%d bytes, chunks=%d, speed_limit=%d bytes/s",
 		downloadController.ID,
 		downloadController.FileName,
 		downloadController.TotalSize,

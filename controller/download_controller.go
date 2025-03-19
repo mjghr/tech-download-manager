@@ -23,18 +23,19 @@ const (
 )
 
 type DownloadController struct {
-	ID         string
-	QueueID    string
-	Url        string
-	Status     Status
-	FileName   string
-	Chunks     [][2]int
-	TotalSize  int
-	HttpClient *client.HTTPClient
-	SpeedLimit int
-	PauseChan  chan bool
-	Mutex      sync.Mutex
-	ResumeChan chan bool
+	ID             string
+	QueueID        string
+	Url            string
+	Status         Status
+	FileName       string
+	Chunks         [][2]int
+	CompletedBytes []int
+	TotalSize      int
+	HttpClient     *client.HTTPClient
+	SpeedLimit     int
+	PauseChan      chan bool
+	Mutex          sync.Mutex
+	ResumeChan     chan bool
 }
 
 func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
@@ -112,7 +113,8 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 				return fmt.Errorf("failed writing %d bytes to %s for chunk %d: %w", n, fileName, idx, writeErr)
 			}
 			totalRead += n
-			log.Printf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, totalRead)
+			d.CompletedBytes[idx] = totalRead
+			log.Printf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, d.CompletedBytes[idx])
 
 			if d.SpeedLimit > 0 {
 				expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds
