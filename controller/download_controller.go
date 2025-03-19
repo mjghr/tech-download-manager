@@ -28,8 +28,7 @@ type DownloadController struct {
 	Url        string
 	Status     Status
 	FileName   string
-	Chunks     int
-	ChunkSize  int
+	Chunks     [][2]int
 	TotalSize  int
 	HttpClient *client.HTTPClient
 	SpeedLimit int
@@ -38,25 +37,24 @@ type DownloadController struct {
 	ResumeChan chan bool
 }
 
-func (d *DownloadController) SplitIntoChunks() [][2]int {
+func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
 	log.Printf("Starting to split download %s into %d chunks (total size: %d bytes)", d.ID, d.Chunks, d.TotalSize)
-	arr := make([][2]int, d.Chunks)
+	arr := make([][2]int, workers)
 
 	if d.TotalSize <= 0 {
 		log.Printf("Error: Total size is %d, cannot split into chunks", d.TotalSize)
 		return arr
 	}
 
-	chunkSize := d.TotalSize / d.Chunks
-	remainder := d.TotalSize % d.Chunks
+	remainder := d.TotalSize % workers
 
 	var start, end int
-	for i := 0; i < d.Chunks; i++ {
+	for i := 0; i < workers; i++ {
 		start = i * chunkSize
 		end = start + chunkSize - 1
 
 		// Add remainder to last chunk
-		if i == d.Chunks-1 {
+		if i == workers-1 {
 			end += remainder
 		}
 

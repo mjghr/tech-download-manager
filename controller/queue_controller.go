@@ -99,7 +99,7 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	log.Printf("Starting download %s in queue %s", dc.ID, qc.QueueID)
 
 	// Split file into chunks
-	chunks := dc.SplitIntoChunks()
+	chunks := dc.Chunks
 
 	// Download each chunk
 	var downloadErr error
