@@ -23,19 +23,22 @@ const (
 )
 
 type DownloadController struct {
-	ID             string
-	QueueID        string
-	Url            string
-	Status         Status
-	FileName       string
-	Chunks         [][2]int
-	CompletedBytes []int
-	TotalSize      int
-	HttpClient     *client.HTTPClient
-	SpeedLimit     int
-	PauseChan      chan bool
-	Mutex          sync.Mutex
-	ResumeChan     chan bool
+	ID             string `json:"id"`
+	QueueID        string `json:"queueId"`
+	Url            string `json:"url"`
+	Status         Status `json:"status"`
+	FileName       string `json:"fileName"`
+	Chunks         [][2]int `json:"chunks"`
+	CompletedBytes []int `json:"completedBytes"`
+	TotalSize      int `json:"totalSize"`
+	HttpClient     *client.HTTPClient `json:"httpClient"`
+	SpeedLimit     int `json:"speedLimit"`
+
+	PauseChan      chan bool `json:"-"`
+	Mutex          sync.Mutex `json:"-"`
+	ResumeChan     chan bool `json:"-"`
+	TokenBucket chan struct{} `json:"-"`
+
 }
 
 func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {

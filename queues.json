@@ -1,0 +1,51 @@
+[
+  {
+    "queueId": "queue-1742555906006828200",
+    "speedLimit": 102400,
+    "concurrentDownloadLimit": 2,
+    "startTime": "2025-03-21T14:48:26.007363+03:30",
+    "endTime": "2025-03-21T15:48:26.007363+03:30",
+    "downloadControllers": [
+      {
+        "id": "dc-1742555905736751000",
+        "queueId": "",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/3/31/Napoleon_I_of_France_by_Andrea_Appiani.jpg",
+        "status": 0,
+        "fileName": "Napoleon_I_of_France_by_Andrea_Appiani.jpg",
+        "chunks": [
+          [
+            0,
+            3117265
+          ]
+        ],
+        "completedBytes": [
+          0
+        ],
+        "totalSize": 3117266,
+        "httpClient": {},
+        "speedLimit": 0
+      },
+      {
+        "id": "dc-1742555906005684000",
+        "queueId": "",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg/640px-David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg",
+        "status": 0,
+        "fileName": "640px-David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg",
+        "chunks": [
+          [
+            0,
+            191756
+          ]
+        ],
+        "completedBytes": [
+          0
+        ],
+        "totalSize": 191757,
+        "httpClient": {},
+        "speedLimit": 0
+      }
+    ],
+    "tempPath": "C:\\Users\\Mahan Gh\\Desktop\\tmp",
+    "savePath": "C:\\Users\\Mahan Gh\\Desktop\\download"
+  }
+]

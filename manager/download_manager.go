@@ -36,8 +36,8 @@ func (d *DownloadManager) DownloadQueue(queue *controller.QueueController) {
 	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, queue.ConcurrenDownloadtLimit) // Limit concurrent downloads
-	log.Printf("Starting download queue %s with %d concurrent download limit", queue.QueueID, queue.ConcurrenDownloadtLimit)
+	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
+	log.Printf("Starting download queue %s with %d concurrent download limit", queue.QueueID, queue.ConcurrentDownloadLimit)
 
 	for i := range queue.DownloadControllers {
 		wg.Add(1)

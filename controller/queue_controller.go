@@ -10,23 +10,24 @@ import (
 
 // QueueController manages a download queue with features like pause, resume, and concurrent download limits
 type QueueController struct {
-	QueueID                 string
-	SpeedLimit              int
-	ConcurrenDownloadtLimit int
-	StartTime               time.Time
-	EndTime                 time.Time
-	DownloadControllers     []*DownloadController
-	TempPath                string
-	SavePath                string
-	mutex                   sync.Mutex
-	wg                      sync.WaitGroup
+	QueueID                 string `json:"queueId"`
+	SpeedLimit              int `json:"speedLimit"`
+	ConcurrentDownloadLimit int `json:"concurrentDownloadLimit"`
+	StartTime               time.Time `json:"startTime"`
+	EndTime                 time.Time `json:"endTime"`
+	DownloadControllers     []*DownloadController `json:"downloadControllers"`
+	TempPath                string `json:"tempPath"`
+	SavePath                string `json:"savePath"`
+	
+	mutex                   sync.Mutex `json:"-"`
+	wg                      sync.WaitGroup `json:"-"`
 }
 
 // NewQueueController creates a new queue controller
 func NewQueueController(queueID, tempPath, savePath string, concurrentLimit, speedLimit int) *QueueController {
 	return &QueueController{
 		QueueID:                 queueID,
-		ConcurrenDownloadtLimit: concurrentLimit,
+		ConcurrentDownloadLimit: concurrentLimit,
 		SpeedLimit:              speedLimit,
 		TempPath:                tempPath,
 		SavePath:                savePath,
@@ -166,7 +167,7 @@ func (qc *QueueController) waitForDownloadSlot(dc *DownloadController) {
 				activeCount++
 			}
 		}
-		if activeCount < qc.ConcurrenDownloadtLimit {
+		if activeCount < qc.ConcurrentDownloadLimit {
 			qc.mutex.Unlock()
 			return
 		}
@@ -255,7 +256,7 @@ func (qc *QueueController) SetConcurrentLimit(limit int) {
 	qc.mutex.Lock()
 	defer qc.mutex.Unlock()
 
-	qc.ConcurrenDownloadtLimit = limit
+	qc.ConcurrentDownloadLimit = limit
 	log.Printf("Updated concurrent download limit to %d for queue %s", limit, qc.QueueID)
 }
 
