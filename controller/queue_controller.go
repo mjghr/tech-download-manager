@@ -87,10 +87,6 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 		return
 	}
 
-	// Initialize required channels for the download controller
-	dc.PauseChan = make(chan bool)
-	dc.ResumeChan = make(chan bool)
-
 	// Set speed limit from queue if not set individually
 	if dc.SpeedLimit == 0 {
 		dc.SpeedLimit = qc.SpeedLimit

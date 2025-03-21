@@ -107,7 +107,7 @@ func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 		rows = append(rows, table.Row{
 			queue.QueueID,
 			fmt.Sprintf("%d KB/s", queue.SpeedLimit/1024), // Convert speed limit to KB/s
-			fmt.Sprintf("%d", queue.ConcurrenDownloadtLimit),
+			fmt.Sprintf("%d", queue.ConcurrentDownloadLimit),
 			startTime,
 			endTime,
 		})
