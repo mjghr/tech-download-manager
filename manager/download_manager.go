@@ -14,7 +14,13 @@ import (
 	"github.com/mjghr/tech-download-manager/util"
 )
 
-type DownloadManager struct{}
+type DownloadManager struct {
+	QueueList []*controller.QueueController
+}
+
+func (d *DownloadManager) AddQueue(queue *controller.QueueController) {
+	d.QueueList = append(d.QueueList, queue)
+}
 
 func (d *DownloadManager) DownloadQueue(queue *controller.QueueController) {
 	log.Printf("Initializing download queue %s with %d controllers and speed limit %d bytes/s", queue.QueueID, len(queue.DownloadControllers), queue.SpeedLimit)
