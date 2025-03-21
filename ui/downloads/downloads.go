@@ -16,11 +16,6 @@ import (
 
 // KeyMap defines the keybindings for the downloads list
 type KeyMap struct {
-	Delete key.Binding
-	Pause  key.Binding
-	Resume key.Binding
-	Retry  key.Binding
-	Start  key.Binding
 	Up     key.Binding
 	Down   key.Binding
 	Escape key.Binding
@@ -29,26 +24,6 @@ type KeyMap struct {
 // DefaultKeyMap returns the default keybindings
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		Delete: key.NewBinding(
-			key.WithKeys("d", "delete"),
-			key.WithHelp("d/delete", "delete download"),
-		),
-		Pause: key.NewBinding(
-			key.WithKeys("p"),
-			key.WithHelp("p", "pause download"),
-		),
-		Resume: key.NewBinding(
-			key.WithKeys("r"),
-			key.WithHelp("r", "resume download"),
-		),
-		Retry: key.NewBinding(
-			key.WithKeys("t"),
-			key.WithHelp("t", "retry failed download"),
-		),
-		Start: key.NewBinding(
-			key.WithKeys("s"),
-			key.WithHelp("s", "start download"),
-		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
 			key.WithHelp("↑/k", "up"),
@@ -146,118 +121,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch {
-			// Handle delete key
-			case key.Matches(msg, m.keymap.Delete):
-				if len(m.allDownloads) > 0 && m.table.Cursor() < len(m.allDownloads) {
-					selected := m.allDownloads[m.table.Cursor()]
-					// Delete/Cancel the download
-					selected.Cancel("")
-					m.statusMessage = fmt.Sprintf("Deleted download: %s", truncateString(selected.Url, 30))
-					m.showStatus = true
-					m.statusExpiry = now.Add(3 * time.Second)
-					return m, tea.Batch(cmd, tea.ClearScreen)
-				}
-
-			// Handle start key
-			case key.Matches(msg, m.keymap.Start):
-				if len(m.allDownloads) > 0 && m.table.Cursor() < len(m.allDownloads) {
-					selected := m.allDownloads[m.table.Cursor()]
-					if selected.Status == controller.NOT_STARTED || selected.Status == controller.FAILED || selected.Status == controller.CANCELED {
-						// Validate that the download has a valid URL before attempting to start
-						if selected.Url == "" || strings.TrimSpace(selected.Url) == "" {
-							m.statusMessage = "Cannot start: download has an empty URL"
-							m.showStatus = true
-							m.statusExpiry = now.Add(3 * time.Second)
-							return m, cmd
-						}
-
-						// Find the queue for this download
-						var targetQueue *controller.QueueController
-						for _, queue := range m.queues {
-							if queue.QueueID == selected.QueueID {
-								targetQueue = queue
-								break
-							}
-						}
-
-						if targetQueue != nil {
-							// Start the download immediately
-							err := targetQueue.StartDownload(selected.ID)
-							if err != nil {
-								m.statusMessage = fmt.Sprintf("Error starting download: %v", err)
-							} else {
-								m.statusMessage = fmt.Sprintf("Started download: %s", truncateString(selected.Url, 30))
-							}
-						} else {
-							m.statusMessage = "Could not find queue for this download"
-						}
-
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-						return m, tea.Batch(cmd, tea.ClearScreen)
-					} else {
-						m.statusMessage = "Can only start downloads that are not in progress, paused, or completed"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					}
-				}
-
-			// Handle pause key
-			case key.Matches(msg, m.keymap.Pause):
-				if len(m.allDownloads) > 0 && m.table.Cursor() < len(m.allDownloads) {
-					selected := m.allDownloads[m.table.Cursor()]
-					if selected.Status == controller.ONGOING {
-						selected.Pause()
-						m.statusMessage = fmt.Sprintf("Paused download: %s", truncateString(selected.Url, 30))
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-						return m, tea.Batch(cmd, tea.ClearScreen)
-					} else {
-						m.statusMessage = "Can only pause downloads that are in progress"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					}
-				}
-
-			// Handle resume key
-			case key.Matches(msg, m.keymap.Resume):
-				if len(m.allDownloads) > 0 && m.table.Cursor() < len(m.allDownloads) {
-					selected := m.allDownloads[m.table.Cursor()]
-					if selected.Status == controller.PAUSED {
-						selected.Resume()
-						m.statusMessage = fmt.Sprintf("Resumed download: %s", truncateString(selected.Url, 30))
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-						return m, tea.Batch(cmd, tea.ClearScreen)
-					} else {
-						m.statusMessage = "Can only resume paused downloads"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					}
-				}
-
-			// Handle retry key
-			case key.Matches(msg, m.keymap.Retry):
-				if len(m.allDownloads) > 0 && m.table.Cursor() < len(m.allDownloads) {
-					selected := m.allDownloads[m.table.Cursor()]
-					if selected.Status == controller.FAILED {
-						// Set status to "not started" to allow it to be picked up again
-						selected.SetStatus(controller.NOT_STARTED)
-						m.statusMessage = fmt.Sprintf("Retrying download: %s", truncateString(selected.Url, 30))
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-						return m, tea.Batch(cmd, tea.ClearScreen)
-					} else {
-						m.statusMessage = "Can only retry failed downloads"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					}
-				}
-
-			// Pass navigation keys to the table and return immediately to prevent double handling
+			// Pass navigation keys to the table
 			case key.Matches(msg, m.keymap.Up), key.Matches(msg, m.keymap.Down):
 				m.table, cmd = m.table.Update(msg)
-				return m, cmd
 			}
 		}
 	}
@@ -353,14 +219,9 @@ func (m Model) helpView() string {
 		Italic(true)
 
 	if m.focused {
-		// When focused, show all keyboard commands
+		// When focused, show only navigation commands
 		helpEntries = []string{
 			"↑/↓: navigate",
-			"s: start",
-			"p: pause",
-			"r: resume",
-			"t: retry failed",
-			"d: delete",
 			"esc: toggle focus",
 		}
 	} else {

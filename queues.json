@@ -96,7 +96,7 @@
         "id": "dc-1742583535249416838",
         "queueId": "queue-1742583481316716906",
         "url": "wefw",
-        "status": 0,
+        "status": 2,
         "fileName": "",
         "chunks": null,
         "completedBytes": null,

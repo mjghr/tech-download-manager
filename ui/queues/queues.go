@@ -51,75 +51,88 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.statusMessage = ""
 	}
 
-	if m.focused && len(m.tables) > 0 {
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// Log key presses for debugging
+		logs.Log(fmt.Sprintf("Key pressed in queues tab: %s, activeTable: %d, queues: %d",
+			msg.String(), m.activeTable, len(m.queues)))
+
+		// Handle function keys specially - don't rely on the sub-tables
+		if m.focused && len(m.queues) > 0 && (msg.String() == "f1" || msg.String() == "f2" || msg.String() == "f3" || msg.String() == "f4") {
+			// Make sure activeTable is within bounds
+			if m.activeTable >= len(m.queues) {
+				m.activeTable = 0
+			}
+
+			// Get the active queue
+			queue := m.queues[m.activeTable]
+			logs.Log(fmt.Sprintf("F-key action on queue: %s (index %d of %d)",
+				queue.QueueName, m.activeTable, len(m.queues)))
+
 			switch msg.String() {
-			case "f1", "f2", "f3", "f4":
-				// Handle function keys for entire queue operations
-				if len(m.queues) > 0 {
-					queueName := m.queues[m.activeTable].QueueName
-
-					switch msg.String() {
-					case "f1":
-						// Start all downloads in the queue
-						// Start in the main goroutine to ensure UI updates
-						err := m.queues[m.activeTable].Start()
-						if err != nil {
-							logs.Log(fmt.Sprintf("Error starting queue: %v", err))
-							m.statusMessage = fmt.Sprintf("Error: %v", err)
-						} else {
-							logs.Log(fmt.Sprintf("Started all downloads in queue: %s", queueName))
-							m.statusMessage = "Started all downloads in queue"
-						}
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					case "f2":
-						// Pause all downloads in the queue
-						m.queues[m.activeTable].PauseAll()
-						logs.Log(fmt.Sprintf("Paused all downloads in queue: %s", queueName))
-						m.statusMessage = "Paused all downloads in queue"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					case "f3":
-						// Resume all downloads in the queue
-						m.queues[m.activeTable].ResumeAll()
-						logs.Log(fmt.Sprintf("Resumed all downloads in queue: %s", queueName))
-						m.statusMessage = "Resumed all downloads in queue"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					case "f4":
-						// Cancel all downloads in the queue
-						m.queues[m.activeTable].CancelAll()
-						logs.Log(fmt.Sprintf("Cancelled all downloads in queue: %s", queueName))
-						m.statusMessage = "Cancelled all downloads in queue"
-						m.showStatus = true
-						m.statusExpiry = now.Add(3 * time.Second)
-					}
-
-					// Force a screen refresh to show the updated state
-					return m, tea.Batch(cmd, tea.ClearScreen)
+			case "f1":
+				// Start all downloads in the queue
+				logs.Log(fmt.Sprintf("Attempting to start all downloads in queue: %s", queue.QueueName))
+				err := queue.Start()
+				if err != nil {
+					logs.Log(fmt.Sprintf("Error starting queue: %v", err))
+					m.statusMessage = fmt.Sprintf("Error: %v", err)
+				} else {
+					logs.Log(fmt.Sprintf("Started all downloads in queue: %s", queue.QueueName))
+					m.statusMessage = "Started all downloads in queue"
 				}
-				// Still pass the message to the table to maintain its state
-				m.tables[m.activeTable], cmd = m.tables[m.activeTable].Update(msg)
+				m.showStatus = true
+				m.statusExpiry = now.Add(3 * time.Second)
+			case "f2":
+				// Pause all downloads in the queue
+				logs.Log(fmt.Sprintf("Attempting to pause all downloads in queue: %s", queue.QueueName))
+				queue.PauseAll()
+				logs.Log(fmt.Sprintf("Paused all downloads in queue: %s", queue.QueueName))
+				m.statusMessage = "Paused all downloads in queue"
+				m.showStatus = true
+				m.statusExpiry = now.Add(3 * time.Second)
+			case "f3":
+				// Resume all downloads in the queue
+				logs.Log(fmt.Sprintf("Attempting to resume all downloads in queue: %s", queue.QueueName))
+				queue.ResumeAll()
+				logs.Log(fmt.Sprintf("Resumed all downloads in queue: %s", queue.QueueName))
+				m.statusMessage = "Resumed all downloads in queue"
+				m.showStatus = true
+				m.statusExpiry = now.Add(3 * time.Second)
+			case "f4":
+				// Cancel all downloads in the queue
+				logs.Log(fmt.Sprintf("Attempting to cancel all downloads in queue: %s", queue.QueueName))
+				err := queue.CancelAll()
+				if err != nil {
+					logs.Log(fmt.Sprintf("Error cancelling queue: %v", err))
+					m.statusMessage = fmt.Sprintf("Error: %v", err)
+				} else {
+					logs.Log(fmt.Sprintf("Cancelled all downloads in queue: %s", queue.QueueName))
+					m.statusMessage = "Cancelled all downloads in queue"
+				}
+				m.showStatus = true
+				m.statusExpiry = now.Add(3 * time.Second)
+			}
 
-			case "up", "down":
-				// Pass these keys to the active table
-				m.tables[m.activeTable], cmd = m.tables[m.activeTable].Update(msg)
+			// Force a screen refresh to show the updated state
+			return m, tea.Batch(cmd, tea.ClearScreen)
+		}
 
+		// For other key messages when there are tables to handle them
+		if m.focused && len(m.tables) > 0 {
+			switch msg.String() {
 			case "j":
 				// Cycle to the next queue, wrapping around if needed
-				if len(m.tables) > 0 {
-					m.tables[m.activeTable].Blur()
-					m.activeTable = (m.activeTable + 1) % len(m.tables) // Wrap around
-					m.tables[m.activeTable].Focus()
-					// Force full screen refresh when switching queues
-					return m, tea.Batch(cmd, tea.ClearScreen)
-				}
-
+				m.tables[m.activeTable].Blur()
+				m.activeTable = (m.activeTable + 1) % len(m.tables) // Wrap around
+				m.tables[m.activeTable].Focus()
+				// Force full screen refresh when switching queues
+				return m, tea.Batch(cmd, tea.ClearScreen)
 			default:
-				// Pass other keys to the active table
-				m.tables[m.activeTable], cmd = m.tables[m.activeTable].Update(msg)
+				// Handle other keys by passing them to the active table
+				if m.activeTable < len(m.tables) {
+					m.tables[m.activeTable], cmd = m.tables[m.activeTable].Update(msg)
+				}
 			}
 		}
 	}
@@ -168,7 +181,17 @@ var emptyStateStyle = lipgloss.NewStyle().
 // UpdateQueues updates the queue data
 func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 	logs.Log(fmt.Sprintf("UpdateQueues called with %d queues", len(queues)))
+
+	// Store the queues
 	m.queues = queues
+
+	// Preserve the active table index when possible, reset if out of bounds
+	if m.activeTable >= len(queues) {
+		m.activeTable = 0
+		logs.Log("Reset activeTable to 0 - previous index was out of bounds")
+	}
+
+	// Create new tables for all queues
 	m.tables = make([]table.Model, len(queues))
 
 	// If no queues, return early
@@ -176,6 +199,8 @@ func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 		logs.Log("No queues available to display")
 		return
 	}
+
+	logs.Log(fmt.Sprintf("Creating %d queue tables with active table index: %d", len(queues), m.activeTable))
 
 	// Define columns for download information
 	columns := []table.Column{
@@ -188,6 +213,10 @@ func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 	}
 
 	for i, queue := range queues {
+		// Log the queue we're processing
+		logs.Log(fmt.Sprintf("Creating table for queue %d: %s with %d downloads",
+			i, queue.QueueName, len(queue.DownloadControllers)))
+
 		// Create table for this queue
 		t := table.New(
 			table.WithColumns(columns),
@@ -199,13 +228,13 @@ func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 		t.SetStyles(table.Styles{
 			Header: lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("205")). // Match our label style color
+				Foreground(lipgloss.Color("205")).
 				Padding(0, 1).
-				Border(lipgloss.NormalBorder(), false, false, true, false). // Bottom border only
+				Border(lipgloss.NormalBorder(), false, false, true, false).
 				BorderForeground(lipgloss.Color("240")),
 			Selected: lipgloss.NewStyle().
-				Foreground(lipgloss.Color("231")). // Bright white for text
-				Background(lipgloss.Color("63")).  // Deep blue background
+				Foreground(lipgloss.Color("231")).
+				Background(lipgloss.Color("63")).
 				Bold(true),
 			Cell: lipgloss.NewStyle().
 				Padding(0, 1),
@@ -389,13 +418,19 @@ func (m Model) View() string {
 	// Add help text at the bottom with nice styling
 	helpBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("240")).
+		BorderForeground(lipgloss.Color("63")). // More visible color
 		Padding(0, 1).
 		Italic(true).
 		MarginTop(2).
 		Width(m.width - 20)
 
-	sb.WriteString("\n\n" + helpBoxStyle.Render(helpText))
+	// Process the help text to highlight function keys
+	highlightedHelp := strings.ReplaceAll(helpText, "F1:", lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("F1:"))
+	highlightedHelp = strings.ReplaceAll(highlightedHelp, "F2:", lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("F2:"))
+	highlightedHelp = strings.ReplaceAll(highlightedHelp, "F3:", lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("F3:"))
+	highlightedHelp = strings.ReplaceAll(highlightedHelp, "F4:", lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Render("F4:"))
+
+	sb.WriteString("\n\n" + helpBoxStyle.Render(highlightedHelp))
 
 	// Render content inside the container to ensure consistent dimensions
 	return containerStyle.Render(sb.String())
@@ -436,6 +471,8 @@ const helpText = `
 Controls:
   ↑/↓: Navigate rows
   j: Cycle through queues
+
+Queue Actions:
   F1: Start all downloads in queue
   F2: Pause all downloads in queue
   F3: Resume all downloads in queue

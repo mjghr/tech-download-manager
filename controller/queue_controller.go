@@ -368,11 +368,13 @@ func (qc *QueueController) CancelAll() error {
 	qc.mutex.Lock()
 	defer qc.mutex.Unlock()
 
+	logs.Log(fmt.Sprintf("Cancelling all downloads in queue %s", qc.QueueID))
 	for _, dc := range qc.DownloadControllers {
 		dc.Cancel(qc.TempPath)
 	}
 
-	return fmt.Errorf("failed to cancel al downloads")
+	logs.Log(fmt.Sprintf("Successfully cancelled all downloads in queue %s", qc.QueueID))
+	return nil
 }
 
 // StartDownload immediately starts a specific download

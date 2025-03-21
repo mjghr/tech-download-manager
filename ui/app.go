@@ -229,17 +229,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, tea.ClearScreen)
 			}
 		case 3:
-			// For the downloads list tab
+			// For the downloads list tab (view only)
 			m.downloadsListModel, cmd = m.downloadsListModel.Update(msg)
 			cmds = append(cmds, cmd)
 
-			// For operation keys like delete, pause, resume, retry, ensure we update immediately
-			if key := msg.String(); key == "d" || key == "delete" || key == "p" || key == "r" || key == "t" || key == "s" {
-				// Ensure the download data is updated right away
-				m.updateModels()
-				// Force refresh the screen
-				cmds = append(cmds, tea.ClearScreen)
-			}
+			// Removed special handling for operation keys since downloads tab is now view-only
 		case 4:
 			m.guideModel, cmd = m.guideModel.Update(msg)
 			cmds = append(cmds, cmd)
@@ -345,7 +339,7 @@ func (m AppModel) getFooterText() string {
 	case 2: // Queues tab
 		return "Tab: switch tabs | ESC: toggle focus | F1: start all | F2: pause all | F3: resume all | F4: cancel all | J: next queue | Q: quit"
 	case 3: // Downloads tab
-		return "Tab: switch tabs | ESC: toggle focus | S: start | D: delete | P: pause | R: resume | T: retry | Q: quit"
+		return "Tab: switch tabs | ESC: toggle focus | Q: quit"
 	case 4: // Guide tab
 		return "Tab: switch tabs | ↑/↓: scroll | Q: quit"
 	default:
