@@ -55,6 +55,8 @@ func NewQueueController(name string) *QueueController {
 		TempPath:                util.GiveDefaultTempPath(),
 		SavePath:                util.GiveDefaultSavePath(),
 		DownloadControllers:     make([]*DownloadController, 0),
+		StartTime: time.Now(),
+		EndTime: time.Now().Add(time.Hour*24),
 	}
 }
 

@@ -95,6 +95,7 @@ func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 								dc := m.downloadManager.NewDownloadController(parsedURL)
 								if dc != nil {
 									queue.AddDownload(dc)
+									m.downloadManager.SaveQueues()
 									logs.Log(fmt.Sprintf("Added download %s to queue %s", dc.ID, queue.QueueID))
 
 									// Clear input and reset validation

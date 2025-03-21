@@ -66,55 +66,26 @@ func (m AppModel) Init() tea.Cmd {
 	config.LoadEnv()
 	logs.Log("Welcome to Download Manager")
 
-	filename := "queues.json"
-	loadedQueues, err := controller.LoadQueueControllers(filename)
+	loadedQueues, err := controller.LoadQueueControllers(config.JSON_ADDRESS)
 	if err != nil {
 		logs.Log(fmt.Sprintf("Error loading queues: %v", err))
 	}
 
-	// Add loaded queues to download manager
 	for _, queue := range loadedQueues {
 		m.downloadManager.AddQueue(queue)
 	}
-
-	// Create test URLs
-	url1, err1 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/3/31/Napoleon_I_of_France_by_Andrea_Appiani.jpg")
-	url2, err2 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg/640px-David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg")
-
-	if err1 != nil || err2 != nil {
-		logs.Log(fmt.Sprintf("Invalid URL: %v, %v", err1, err2))
-		return m.logsModel.Init()
-	}
-
-	// Create download controllers
-	dc1 := m.downloadManager.NewDownloadController(url1)
-	dc2 := m.downloadManager.NewDownloadController(url2)
-
-	// Set up queue controller
-	savePath := util.GiveDefaultSavePath()
-
 	queueCtrl := controller.NewQueueController("newQueue")
-	queueCtrl.UpdateQueueController(savePath,
-		2,        // concurrent download limit
-		100*1024, // speed limit (100KB/s)
-		time.Now(),
-		time.Now().Add(time.Hour*24),
-	)
-	// Add queue and downloads
 	m.downloadManager.AddQueue(queueCtrl)
-	queueCtrl.AddDownload(dc1)
-	queueCtrl.AddDownload(dc2)
 
-	// After adding all queues, update the queues model
 	logs.Log(fmt.Sprintf("Updating queues model with %d queues", len(m.downloadManager.QueueList)))
 	m.queuesModel.UpdateQueues(m.downloadManager.QueueList)
 
 	return tea.Batch(
 		m.logsModel.Init(),
-		tick(),             // Add the ticker
-		tea.EnterAltScreen, // Add this
+		tick(),            
+		tea.EnterAltScreen, 
 		func() tea.Msg {
-			// Force an immediate update of the queues view
+
 			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 		},
 	)

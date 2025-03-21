@@ -60,6 +60,26 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.activeTable--
 					m.tables[m.activeTable].Focus()
 				}
+			case "f1":
+				// Start all downloads in selected queue
+				if len(m.queues) > 0 {
+					go m.queues[m.activeTable].Start()
+				}
+			case "f2":
+				// Pause all downloads in selected queue
+				if len(m.queues) > 0 {
+					m.queues[m.activeTable].PauseAll()
+				}
+			case "f3":
+				// Resume all downloads in selected queue
+				if len(m.queues) > 0 {
+					m.queues[m.activeTable].ResumeAll()
+				}
+			case "f4":
+				// Cancel all downloads in selected queue
+				if len(m.queues) > 0 {
+					m.queues[m.activeTable].CancelAll()
+				}
 			default:
 				// Pass other keys to the active table
 				m.tables[m.activeTable], cmd = m.tables[m.activeTable].Update(msg)
@@ -157,6 +177,8 @@ func formatStatus(status controller.Status) string {
 		return "Done"
 	case controller.ONGOING:
 		return "Active"
+	case controller.CANCELED:
+		return "Cancelled"
 	default:
 		return "Unknown"
 	}
@@ -189,6 +211,9 @@ func (m Model) View() string {
 		sb.WriteString(tableContent)
 		sb.WriteString("\n\n")
 	}
+
+	// Add help text at the bottom
+	sb.WriteString(helpStyle.Render(helpText))
 
 	logs.Log(fmt.Sprintf("Rendering table view with %d queues", len(m.queues)))
 	return sb.String()
@@ -228,3 +253,17 @@ var headerStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("205")).
 	PaddingLeft(2)
+
+var helpStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("241")).
+	PaddingLeft(2)
+
+const helpText = `
+Controls:
+  ↑/↓: Navigate rows
+  j/k: Switch between queues
+  F1: Start all downloads
+  F2: Pause all downloads
+  F3: Resume all downloads
+  F4: Cancel all downloads
+`
