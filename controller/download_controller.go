@@ -167,7 +167,7 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string,
 			logs.Log(fmt.Sprintf("Download of chunk %d for %s canceled", idx, d.FileName))
 			return ctx.Err()
 		default:
-			d.checkPause() 
+			d.checkPause()
 
 			n, readErr := resp.Body.Read(buffer)
 			if n > 0 {

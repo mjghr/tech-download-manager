@@ -86,10 +86,10 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	defer qc.wg.Done()
 
 	// // Skip if already completed or failed
-	// if dc.GetStatus() == COMPLETED || dc.GetStatus() == FAILED {
-	// 	logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
-	// 	return
-	// }
+	if dc.GetStatus() == COMPLETED {
+		logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
+		return
+	}
 
 	// Wait for a slot to become available
 	qc.waitForDownloadSlot(dc)

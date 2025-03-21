@@ -8,12 +8,12 @@ import (
 )
 
 // GlobalLogChannel is the channel used for sending log messages.
-var GlobalLogChannel = make(chan string, 1000)
+// var GlobalLogChannel = make(chan string, 1000)
 
 // Log can be called from anywhere in your program to send a log message.
 // For example: logs.Log(fmt.Sprintf(("Download started: file1.zip")
 func Log(message string) {
-	GlobalLogChannel <- message
+	// GlobalLogChannel <- message
 }
 
 // LogMsg is a Bubble Tea message that wraps a log string.
@@ -56,8 +56,9 @@ func NewModel() Model {
 // It blocks until a log is received, then returns it wrapped as a LogMsg.
 func logListener() tea.Cmd {
 	return func() tea.Msg {
-		msg := <-GlobalLogChannel
-		return LogMsg(msg)
+		// msg := <-GlobalLogChannel
+		// return LogMsg(msg)
+		return ""
 	}
 }
 
