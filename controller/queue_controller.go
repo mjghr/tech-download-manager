@@ -19,7 +19,6 @@ type QueueController struct {
 	DownloadControllers     []*DownloadController `json:"downloadControllers"`
 	TempPath                string `json:"tempPath"`
 	SavePath                string `json:"savePath"`
-	
 	mutex                   sync.Mutex `json:"-"`
 	wg                      sync.WaitGroup `json:"-"`
 }
