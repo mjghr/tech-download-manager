@@ -18,6 +18,16 @@ func main() {
 	config.LoadEnv()
 	fmt.Println(config.WELCOME_MESSAGE)
 
+	filename := "queues.json"
+
+	loadedQueues, err := controller.LoadQueueControllers(filename)
+	if err != nil {
+		fmt.Println("Error loading:", err)
+		return
+	}
+
+	fmt.Println(loadedQueues)
+
 	// Parse example URLs
 	url1, err1 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/3/31/Napoleon_I_of_France_by_Andrea_Appiani.jpg")
 	url2, err2 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg/640px-David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg")
@@ -110,16 +120,4 @@ func monitorDownloads(qc *controller.QueueController) {
 			fmt.Printf("File: %s\nStatus: %s\n---------------\n", dc.FileName, statusStr)
 		}
 	}
-}
-
-func getUrlFromUser() (*url.URL, error) {
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print("Enter the file URL to download: ")
-	scanner.Scan()
-	userInput := scanner.Text()
-	parsedURL, err := url.Parse(userInput)
-	if err != nil {
-		return nil, err
-	}
-	return parsedURL, nil
 }
