@@ -33,17 +33,16 @@ func (m *model) Init() tea.Cmd {
 	dc1 := dm.NewDownloadController(url1)
 	dc2 := dm.NewDownloadController(url2)
 
-	tempPath := util.GiveDefaultTempPath()
 	savePath := util.GiveDefaultSavePath()
 
-	queueID := fmt.Sprintf("queue-%d", time.Now().UnixNano())
-	queueCtrl := controller.NewQueueController(
-		queueID,
-		tempPath,
-		savePath,
-		2,
-		100*1024,
+	queueCtrl := controller.NewQueueController("DefaultQueue")
+	queueCtrl.UpdateQueueController(savePath,
+		2,        // concurrent download limit
+		100*1024, // speed limit (100KB/s)
+		time.Now(),
+		time.Now().Add(time.Hour*24),
 	)
+
 	dm.AddQueue(queueCtrl)
 	queueCtrl.AddDownload(dc1)
 	queueCtrl.AddDownload(dc2)

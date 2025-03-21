@@ -91,18 +91,15 @@ func (m AppModel) Init() tea.Cmd {
 	dc2 := m.downloadManager.NewDownloadController(url2)
 
 	// Set up queue controller
-	tempPath := util.GiveDefaultTempPath()
 	savePath := util.GiveDefaultSavePath()
-	queueID := fmt.Sprintf("queue-%d", time.Now().UnixNano())
 
-	queueCtrl := controller.NewQueueController(
-		queueID,
-		tempPath,
-		savePath,
+	queueCtrl := controller.NewQueueController("newQueue")
+	queueCtrl.UpdateQueueController(savePath,
 		2,        // concurrent download limit
 		100*1024, // speed limit (100KB/s)
+		time.Now(),
+		time.Now().Add(time.Hour*24),
 	)
-
 	// Add queue and downloads
 	m.downloadManager.AddQueue(queueCtrl)
 	queueCtrl.AddDownload(dc1)
@@ -220,12 +217,29 @@ func (m AppModel) View() string {
 		content = m.logsModel.View()
 	}
 
-	// 3. Render the footer
-	footer := FooterStyle.Render(m.footerText)
+	// 3. Render the footer with tab-specific text
+	footerText := m.getFooterText()
+	footer := FooterStyle.Render(footerText)
 
 	return BaseStyle.Render(
 		fmt.Sprintf("%s\n\n%s\n\n%s", tabBar, content, footer),
 	)
+}
+
+// Add this new method to get tab-specific footer text
+func (m AppModel) getFooterText() string {
+	switch m.activeTab {
+	case 0: // NewDownload tab
+		return "Tab: switch tabs | ESC: toggle focus | L: switch input | Enter: add download | Q: quit"
+	case 1: // Queues tab
+		return "Tab: switch tabs | ESC: toggle focus | J/K: switch queue | ↑/↓: navigate downloads | Q: quit"
+	case 2: // Guide tab
+		return "Tab: switch tabs | ESC: toggle focus | ↑/↓: scroll guide | Q: quit"
+	case 3: // Logs tab
+		return "Tab: switch tabs | ESC: toggle focus | ↑/↓: scroll logs | Q: quit"
+	default:
+		return "Press Tab to switch tabs | Press ESC to toggle focus | Press Q to quit"
+	}
 }
 
 // renderTabBar returns a string with the tab names styled according to which one is active.

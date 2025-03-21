@@ -1,6 +1,7 @@
 [
   {
     "queueId": "queue-1742555906006828200",
+    "name": "Napoleon",
     "speedLimit": 102400,
     "concurrentDownloadLimit": 2,
     "startTime": "2025-03-21T14:48:26.007363+03:30",

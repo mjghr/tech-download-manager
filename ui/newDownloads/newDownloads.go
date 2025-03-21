@@ -150,7 +150,7 @@ func (m NewDownloadModel) View() string {
 		if i == m.selectedQueue && m.activeInput == 1 {
 			prefix = "➜ "
 		}
-		view += prefix + queue.QueueID + "\n"
+		view += prefix + queue.QueueName + "\n"
 	}
 
 	view += "\nPress Enter to add download"
