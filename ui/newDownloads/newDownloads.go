@@ -3,6 +3,7 @@ package newDownloads
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,26 +13,62 @@ import (
 	"github.com/mjghr/tech-download-manager/ui/logs"
 )
 
-// Add validation styles at the top of the file
+// Setup styles for different input states
 var (
-	normalStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240"))
+	focusedStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(0, 1).
+			Width(50)
+
+	blurredStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1).
+			Width(50)
 
 	errorStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("196")) // Red color
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("196")).
+			Padding(0, 1).
+			Width(50)
+
+	normalStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Padding(0, 1).
+			Width(50)
+
+	labelStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("205"))
+
+	selectorStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(0, 1)
+
+	successStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("42")). // Green color
+			Bold(true)
+
+	warningStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("208")). // Orange color
+			Italic(true)
 )
 
 // Add download manager to the model struct
 type NewDownloadModel struct {
-	urlInput        textinput.Model
-	queues          []*controller.QueueController
-	selectedQueue   int
-	focused         bool
-	activeInput     int
-	urlError        bool
-	downloadManager *manager.DownloadManager
+	urlInput           textinput.Model
+	queues             []*controller.QueueController
+	selectedQueue      int
+	focused            bool
+	activeInput        int
+	urlError           bool
+	downloadManager    *manager.DownloadManager
+	successMessage     string
+	showSuccessMessage bool
+	messageTimer       int
 }
 
 // Update NewModel to accept download manager
@@ -41,16 +78,24 @@ func NewModel(dm *manager.DownloadManager) NewDownloadModel {
 	urlInput.Focus()
 
 	return NewDownloadModel{
-		urlInput:        urlInput,
-		focused:         true,
-		activeInput:     0,
-		urlError:        false,
-		downloadManager: dm,
+		urlInput:           urlInput,
+		focused:            true,
+		activeInput:        0,
+		urlError:           false,
+		downloadManager:    dm,
+		successMessage:     "",
+		showSuccessMessage: false,
+		messageTimer:       0,
 	}
 }
 
 func (m *NewDownloadModel) UpdateQueues(queues []*controller.QueueController) {
 	m.queues = queues
+
+	// Ensure selected queue is valid
+	if len(m.queues) > 0 && m.selectedQueue >= len(m.queues) {
+		m.selectedQueue = 0
+	}
 }
 
 func (m *NewDownloadModel) validate() bool {
@@ -71,10 +116,19 @@ func (m *NewDownloadModel) validate() bool {
 func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Handle the timer for success message
+	if m.showSuccessMessage {
+		m.messageTimer++
+		if m.messageTimer > 10 { // roughly 2.5 seconds with a 250ms tick
+			m.showSuccessMessage = false
+			m.messageTimer = 0
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "l":
+		case "f5":
 			m.activeInput = (m.activeInput + 1) % 2 // URL input + queue selection
 
 			m.urlInput.Blur()
@@ -84,27 +138,44 @@ func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 
 		case "enter":
 			if m.activeInput == 1 { // Queue selection
+				if len(m.queues) == 0 {
+					logs.Log("Cannot add download: no queues available")
+					m.successMessage = "Please create a queue first in the NewQueue tab."
+					m.showSuccessMessage = true
+					m.messageTimer = 0
+					return m, cmd
+				}
+
 				if m.validate() {
 					if urlStr := m.urlInput.Value(); urlStr != "" {
 						if parsedURL, err := url.Parse(urlStr); err == nil {
-							if len(m.queues) > 0 {
-								queue := m.queues[m.selectedQueue]
-								logs.Log(fmt.Sprintf("Creating new download controller for URL: %s with Queue ID: %s", parsedURL.String(), queue.QueueID))
+							queue := m.queues[m.selectedQueue]
+							logs.Log(fmt.Sprintf("Creating new download controller for URL: %s with Queue ID: %s", parsedURL.String(), queue.QueueID))
 
-								// Create new download controller using manager
-								dc := m.downloadManager.NewDownloadController(parsedURL)
-								if dc != nil {
-									queue.AddDownload(dc)
-									logs.Log(fmt.Sprintf("Added download %s to queue %s", dc.ID, queue.QueueID))
+							// Create new download controller using manager
+							dc := m.downloadManager.NewDownloadController(parsedURL)
+							if dc != nil {
+								queue.AddDownload(dc)
+								logs.Log(fmt.Sprintf("Added download %s to queue %s", dc.ID, queue.QueueID))
 
-									// Clear input and reset validation
-									m.urlInput.SetValue("")
-									m.urlError = false
-								} else {
-									logs.Log("Failed to create download controller")
+								// Save all queues to queues.json after adding download
+								if err := controller.SaveQueueControllers("queues.json", m.downloadManager.QueueList); err != nil {
+									logs.Log(fmt.Sprintf("Error saving queues: %v", err))
 								}
+
+								// Set success message
+								m.successMessage = fmt.Sprintf("Added '%s' to queue '%s'", dc.FileName, queue.QueueName)
+								m.showSuccessMessage = true
+								m.messageTimer = 0
+
+								// Clear input and reset validation
+								m.urlInput.SetValue("")
+								m.urlError = false
 							} else {
-								logs.Log("Warning: No queues available to add download")
+								logs.Log("Failed to create download controller")
+								m.successMessage = "Failed to create download - check URL and try again."
+								m.showSuccessMessage = true
+								m.messageTimer = 0
 							}
 						}
 					}
@@ -112,7 +183,7 @@ func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 			}
 
 		case "up", "down":
-			if m.activeInput == 1 { // Queue selection
+			if m.activeInput == 1 && len(m.queues) > 0 { // Queue selection
 				if msg.String() == "up" {
 					m.selectedQueue = (m.selectedQueue - 1 + len(m.queues)) % len(m.queues)
 				} else {
@@ -131,31 +202,87 @@ func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 }
 
 func (m NewDownloadModel) View() string {
-	var view string
+	// Create a fixed-size container for consistent rendering
+	containerStyle := lipgloss.NewStyle().
+		Width(m.urlInput.Width + 20).
+		Padding(1).
+		BorderStyle(lipgloss.HiddenBorder())
 
-	// Show URL input with validation style
-	view += "URL:\n"
+	var view strings.Builder
+
+	// URL input with validation style
+	view.WriteString(labelStyle.Render("URL (required):") + "\n")
 	urlView := m.urlInput.View()
 	if m.urlError {
 		urlView = errorStyle.Render(urlView)
+	} else if m.urlInput.Focused() {
+		urlView = focusedStyle.Render(urlView)
 	} else {
-		urlView = normalStyle.Render(urlView)
+		urlView = blurredStyle.Render(urlView)
 	}
-	view += urlView + "\n\n"
+	view.WriteString(urlView + "\n\n")
 
-	// Show queue selection
-	view += "Select Queue (use up/down):\n"
-	for i, queue := range m.queues {
-		prefix := "  "
-		if i == m.selectedQueue && m.activeInput == 1 {
-			prefix = "➜ "
+	// Queue selection
+	view.WriteString(labelStyle.Render("Select Queue:") + "\n")
+
+	if len(m.queues) == 0 {
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Italic(true).
+			Padding(0, 1).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("214"))
+
+		warningText := "No queues available! Create a queue first."
+		view.WriteString(warningStyle.Render(warningText) + "\n\n")
+	} else {
+		// Create a styled dropdown for queue selection
+		queueBox := selectorStyle.Copy().Width(m.urlInput.Width)
+		var queueContent strings.Builder
+
+		for i, queue := range m.queues {
+			if i == m.selectedQueue {
+				queueContent.WriteString(lipgloss.NewStyle().
+					Foreground(lipgloss.Color("205")).
+					Bold(true).
+					Background(lipgloss.Color("236")).
+					Padding(0, 1).
+					Render("▶ " + queue.QueueName))
+			} else {
+				queueContent.WriteString(lipgloss.NewStyle().
+					Foreground(lipgloss.Color("252")).
+					Padding(0, 1).
+					Render("• " + queue.QueueName))
+			}
+			queueContent.WriteString("\n")
 		}
-		view += prefix + queue.QueueName + "\n"
+
+		view.WriteString(queueBox.Render(queueContent.String()) + "\n\n")
 	}
 
-	view += "\nPress Enter to add download"
+	// Show success message if needed
+	if m.showSuccessMessage {
+		successStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("42")).
+			Bold(true).
+			Padding(1).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("36"))
+		view.WriteString(successStyle.Render(m.successMessage) + "\n\n")
+	}
 
-	return view
+	// Add hint text at the bottom with nice styling
+	hintStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("241")).
+		Italic(true).
+		Align(lipgloss.Center).
+		Width(m.urlInput.Width + 16)
+
+	hint := "Press Enter to add download | Press F5 to switch input and queue"
+	view.WriteString(hintStyle.Render(hint))
+
+	// Wrap in the container for consistent sizing
+	return containerStyle.Render(view.String())
 }
 
 func (m *NewDownloadModel) SetSize(width, height int) {

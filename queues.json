@@ -1,7 +1,6 @@
 [
   {
     "queueId": "queue-1742555906006828200",
-    "name": "Napoleon",
     "speedLimit": 102400,
     "concurrentDownloadLimit": 2,
     "startTime": "2025-03-21T14:48:26.007363+03:30",
@@ -44,9 +43,128 @@
         "totalSize": 191757,
         "httpClient": {},
         "speedLimit": 0
+      },
+      {
+        "id": "dc-1742583506775471136",
+        "queueId": "",
+        "url": "ewfonewfwl",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 0
+      },
+      {
+        "id": "dc-1742584681133645932",
+        "queueId": "",
+        "url": "kwqdwqfqwl",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 0
+      },
+      {
+        "id": "dc-1742584886872123680",
+        "queueId": "",
+        "url": "nim",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 0
       }
     ],
     "tempPath": "C:\\Users\\Mahan Gh\\Desktop\\tmp",
-    "savePath": "C:\\Users\\Mahan Gh\\Desktop\\download"
+    "savePath": "C:\\Users\\Mahan Gh\\Desktop\\download",
+    "name": "Napoleon"
+  },
+  {
+    "queueId": "queue-1742583481316716906",
+    "speedLimit": 102400,
+    "concurrentDownloadLimit": 1,
+    "startTime": "2025-03-21T22:28:01.316733078+03:30",
+    "endTime": "2025-03-22T22:28:01.316733167+03:30",
+    "downloadControllers": [
+      {
+        "id": "dc-1742583535249416838",
+        "queueId": "",
+        "url": "wefw",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 102400
+      },
+      {
+        "id": "dc-1742583716246717994",
+        "queueId": "",
+        "url": "wdq",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 102400
+      }
+    ],
+    "tempPath": "/home/nima/Downloads/tmp",
+    "savePath": "/home/nima/Downloads/download",
+    "name": "ewfonewfw"
+  },
+  {
+    "queueId": "queue-1742583506775659113",
+    "speedLimit": 102400,
+    "concurrentDownloadLimit": 1,
+    "startTime": "2025-03-21T22:28:26.775664293+03:30",
+    "endTime": "2025-03-22T22:28:26.775664331+03:30",
+    "downloadControllers": [
+      {
+        "id": "dc-1742584891232134482",
+        "queueId": "",
+        "url": "klk",
+        "status": 2,
+        "fileName": "",
+        "chunks": null,
+        "completedBytes": null,
+        "totalSize": 0,
+        "httpClient": null,
+        "speedLimit": 102400
+      }
+    ],
+    "tempPath": "/home/nima/Downloads/tmp",
+    "savePath": "/home/nima/Downloads/download",
+    "name": "l"
+  },
+  {
+    "queueId": "queue-1742583526399992824",
+    "speedLimit": 102400,
+    "concurrentDownloadLimit": 1,
+    "startTime": "2025-03-21T22:28:46.400002513+03:30",
+    "endTime": "2025-03-22T22:28:46.400002551+03:30",
+    "downloadControllers": [],
+    "tempPath": "/home/nima/Downloads/tmp",
+    "savePath": "/home/nima/Downloads/download",
+    "name": "wefw"
+  },
+  {
+    "queueId": "queue-1742584895368580707",
+    "speedLimit": 102400,
+    "concurrentDownloadLimit": 1,
+    "startTime": "2025-03-21T22:51:35.368602754+03:30",
+    "endTime": "2025-03-22T22:51:35.368602838+03:30",
+    "downloadControllers": [],
+    "tempPath": "/home/nima/Downloads/tmp",
+    "savePath": "/home/nima/Downloads/download",
+    "name": "nima"
   }
 ]
