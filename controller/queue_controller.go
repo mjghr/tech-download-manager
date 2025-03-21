@@ -2,10 +2,11 @@ package controller
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/mjghr/tech-download-manager/ui/logs"
 )
 
 // QueueController manages a download queue with features like pause, resume, and concurrent download limits
@@ -36,7 +37,7 @@ func NewQueueController(queueID, tempPath, savePath string, concurrentLimit, spe
 
 // Start begins processing the download queue
 func (qc *QueueController) Start() error {
-	log.Printf("Starting queue %s processing", qc.QueueID)
+	logs.Log(fmt.Sprintf("Starting queue %s processing", qc.QueueID))
 
 	// Check if temp directory exists, create if not
 	if err := os.MkdirAll(qc.TempPath, 0755); err != nil {
@@ -54,7 +55,7 @@ func (qc *QueueController) Start() error {
 	}
 
 	qc.wg.Wait()
-	log.Printf("Queue %s processing completed", qc.QueueID)
+	logs.Log(fmt.Sprintf("Queue %s processing completed", qc.QueueID))
 	return nil
 }
 
@@ -64,7 +65,7 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 
 	// Skip if already completed or failed
 	if dc.GetStatus() == COMPLETED || dc.GetStatus() == FAILED {
-		log.Printf("Download %s skipped: already %v", dc.ID, dc.GetStatus())
+		logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
 		return
 	}
 
@@ -75,13 +76,13 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	now := time.Now()
 	if !qc.StartTime.IsZero() && now.Before(qc.StartTime) {
 		waitDuration := qc.StartTime.Sub(now)
-		log.Printf("Waiting %v for scheduled start time for download %s", waitDuration, dc.ID)
+		logs.Log(fmt.Sprintf("Waiting %v for scheduled start time for download %s", waitDuration, dc.ID))
 		time.Sleep(waitDuration)
 	}
 
 	// Check if we're already past end time
 	if !qc.EndTime.IsZero() && now.After(qc.EndTime) {
-		log.Printf("Download %s skipped as current time is past the end time", dc.ID)
+		logs.Log(fmt.Sprintf("Download %s skipped as current time is past the end time", dc.ID))
 		return
 	}
 
@@ -96,7 +97,7 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 
 	// Mark this download as in progress
 	dc.SetStatus(ONGOING)
-	log.Printf("Starting download %s in queue %s", dc.ID, qc.QueueID)
+	logs.Log(fmt.Sprintf("Starting download %s in queue %s", dc.ID, qc.QueueID))
 
 	// Split file into chunks
 	chunks := dc.Chunks
@@ -110,12 +111,12 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 		go func(idx int, byteChunk [2]int) {
 			defer chunkWg.Done()
 			if dc.GetStatus() != ONGOING { // Check status before proceeding
-				log.Printf("Chunk %d for %s skipped: download not ONGOING", idx, dc.ID)
+				logs.Log(fmt.Sprintf("Chunk %d for %s skipped: download not ONGOING", idx, dc.ID))
 				return
 			}
 			err := dc.Download(idx, byteChunk, qc.TempPath)
 			if err != nil {
-				log.Printf("Error downloading chunk %d for %s: %v", idx, dc.FileName, err)
+				logs.Log(fmt.Sprintf("Error downloading chunk %d for %s: %v", idx, dc.FileName, err))
 				downloadErr = err
 				dc.SetStatus(FAILED)
 			}
@@ -127,13 +128,13 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 
 	// Check if download failed
 	if downloadErr != nil {
-		log.Printf("Download %s failed: %v", dc.ID, downloadErr)
+		logs.Log(fmt.Sprintf("Download %s failed: %v", dc.ID, downloadErr))
 		return
 	}
 
 	// Check if we're past the end time
 	if !qc.EndTime.IsZero() && time.Now().After(qc.EndTime) {
-		log.Printf("Download %s completed chunks but current time is past the end time, not merging", dc.ID)
+		logs.Log(fmt.Sprintf("Download %s completed chunks but current time is past the end time, not merging", dc.ID))
 		dc.Status = FAILED
 		return
 	}
@@ -141,19 +142,19 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	// Merge chunks and cleanup
 	err := dc.MergeDownloads(qc.TempPath, qc.SavePath)
 	if err != nil {
-		log.Printf("Failed to merge chunks for %s: %v", dc.ID, err)
+		logs.Log(fmt.Sprintf("Failed to merge chunks for %s: %v", dc.ID, err))
 		dc.Status = FAILED
 		return
 	}
 
 	err = dc.CleanupTmpFiles(qc.TempPath)
 	if err != nil {
-		log.Printf("Warning: failed to clean up temp files for %s: %v", dc.ID, err)
+		logs.Log(fmt.Sprintf("Warning: failed to clean up temp files for %s: %v", dc.ID, err))
 		// Still consider the download complete even if cleanup fails
 	}
 
 	dc.Status = COMPLETED
-	log.Printf("Download %s completed successfully", dc.ID)
+	logs.Log(fmt.Sprintf("Download %s completed successfully", dc.ID))
 }
 
 // waitForDownloadSlot waits until a download slot is available
@@ -177,7 +178,7 @@ func (qc *QueueController) waitForDownloadSlot(dc *DownloadController) {
 
 		// Check if we're already past end time
 		if !qc.EndTime.IsZero() && time.Now().After(qc.EndTime) {
-			log.Printf("Download %s skipped while waiting for slot as current time is past the end time", dc.ID)
+			logs.Log(fmt.Sprintf("Download %s skipped while waiting for slot as current time is past the end time", dc.ID))
 			return
 		}
 	}
@@ -185,7 +186,7 @@ func (qc *QueueController) waitForDownloadSlot(dc *DownloadController) {
 
 // PauseAll pauses all active downloads in the queue
 func (qc *QueueController) PauseAll() {
-	log.Printf("Pausing all downloads in queue %s", qc.QueueID)
+	logs.Log(fmt.Sprintf("Pausing all downloads in queue %s", qc.QueueID))
 	for _, dc := range qc.DownloadControllers {
 		dc.Pause()
 	}
@@ -193,7 +194,7 @@ func (qc *QueueController) PauseAll() {
 
 // ResumeAll resumes all paused downloads in the queue
 func (qc *QueueController) ResumeAll() {
-	log.Printf("Resuming all downloads in queue %s", qc.QueueID)
+	logs.Log(fmt.Sprintf("Resuming all downloads in queue %s", qc.QueueID))
 	for _, dc := range qc.DownloadControllers {
 		dc.Resume()
 	}
@@ -227,7 +228,7 @@ func (qc *QueueController) AddDownload(dc *DownloadController) {
 	defer qc.mutex.Unlock()
 
 	qc.DownloadControllers = append(qc.DownloadControllers, dc)
-	log.Printf("Added download %s to queue %s", dc.ID, qc.QueueID)
+	logs.Log(fmt.Sprintf("Added download %s to queue %s", dc.ID, qc.QueueID))
 }
 
 // RemoveDownload removes a download from the queue
@@ -242,7 +243,7 @@ func (qc *QueueController) RemoveDownload(downloadID string) error {
 				qc.DownloadControllers[:i],
 				qc.DownloadControllers[i+1:]...,
 			)
-			log.Printf("Removed download %s from queue %s", downloadID, qc.QueueID)
+			logs.Log(fmt.Sprintf("Removed download %s from queue %s", downloadID, qc.QueueID))
 			return nil
 		}
 	}
@@ -256,7 +257,7 @@ func (qc *QueueController) SetConcurrentLimit(limit int) {
 	defer qc.mutex.Unlock()
 
 	qc.ConcurrenDownloadtLimit = limit
-	log.Printf("Updated concurrent download limit to %d for queue %s", limit, qc.QueueID)
+	logs.Log(fmt.Sprintf("Updated concurrent download limit to %d for queue %s", limit, qc.QueueID))
 }
 
 // SetTimeWindow sets the time window for downloads
@@ -266,8 +267,8 @@ func (qc *QueueController) SetTimeWindow(startTime, endTime time.Time) {
 
 	qc.StartTime = startTime
 	qc.EndTime = endTime
-	log.Printf("Updated time window for queue %s: start=%v, end=%v",
-		qc.QueueID, startTime.Format(time.RFC3339), endTime.Format(time.RFC3339))
+	logs.Log(fmt.Sprintf("Updated time window for queue %s: start=%v, end=%v",
+		qc.QueueID, startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)))
 }
 
 func (qc *QueueController) SetPaths(tempPath, savePath string) error {
@@ -289,6 +290,6 @@ func (qc *QueueController) SetPaths(tempPath, savePath string) error {
 
 	qc.TempPath = tempPath
 	qc.SavePath = savePath
-	log.Printf("Updated paths for queue %s: temp=%s, save=%s", qc.QueueID, tempPath, savePath)
+	logs.Log(fmt.Sprintf("Updated paths for queue %s: temp=%s, save=%s", qc.QueueID, tempPath, savePath))
 	return nil
 }

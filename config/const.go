@@ -21,7 +21,7 @@ func LoadEnv() {
 	}
 	WELCOME_MESSAGE = getEnvString("WELCOME_MESSAGE", "")
 	WORKERS_NUM = getEnvInt("WORKERS_NUM", 0)
-	TMP_FILE_PREFIX = getEnvString("TMP_FILE_PREFIX","")
+	TMP_FILE_PREFIX = getEnvString("TMP_FILE_PREFIX", "")
 }
 
 func getEnvString(key, defaultValue string) string {
@@ -35,7 +35,7 @@ func getEnvInt(key string, defaultValue int) int {
 	if value, exists := os.LookupEnv(key); exists {
 		intValue, err := strconv.Atoi(value)
 		if err != nil {
-			log.Printf("Warning: %s is not a valid integer, using default value %d\n", key, defaultValue)
+			// logs.Log(fmt.Sprintf(("Warning: %s is not a valid integer, using default value %d\n", key, defaultValue)
 			return defaultValue
 		}
 		return intValue
