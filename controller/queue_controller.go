@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mjghr/tech-download-manager/ui/logs"
+	"github.com/mjghr/tech-download-manager/util"
 )
 
 // QueueController manages a download queue with features like pause, resume, and concurrent download limits
@@ -21,19 +22,38 @@ type QueueController struct {
 	DownloadControllers     []*DownloadController `json:"downloadControllers"`
 	TempPath                string                `json:"tempPath"`
 	SavePath                string                `json:"savePath"`
+	QueueName               string                `json:"name"`
 
 	mutex sync.Mutex     `json:"-"`
 	wg    sync.WaitGroup `json:"-"`
 }
 
-// NewQueueController creates a new queue controller
-func NewQueueController(queueID, tempPath, savePath string, concurrentLimit, speedLimit int) *QueueController {
+func (qc *QueueController) UpdateQueueController(savePath string, concurrentDownloadLimit, speedLimit int, startTime, endTime time.Time) {
+	if savePath != "" {
+		qc.SavePath = savePath
+	}
+	if concurrentDownloadLimit != 0 {
+		qc.ConcurrentDownloadLimit = concurrentDownloadLimit
+	}
+	if speedLimit != 0 {
+		qc.SpeedLimit = speedLimit
+	}
+	if !startTime.IsZero() {
+		qc.StartTime = startTime
+	}
+	if !endTime.IsZero() {
+		qc.EndTime = endTime
+	}
+}
+
+func NewQueueController(name string) *QueueController {
 	return &QueueController{
-		QueueID:                 queueID,
-		ConcurrentDownloadLimit: concurrentLimit,
-		SpeedLimit:              speedLimit,
-		TempPath:                tempPath,
-		SavePath:                savePath,
+		QueueID:                 fmt.Sprintf("queue-%d", time.Now().UnixNano()),
+		QueueName:               name,
+		ConcurrentDownloadLimit: 1,
+		SpeedLimit:              100 * 1024,
+		TempPath:                util.GiveDefaultTempPath(),
+		SavePath:                util.GiveDefaultSavePath(),
 		DownloadControllers:     make([]*DownloadController, 0),
 	}
 }

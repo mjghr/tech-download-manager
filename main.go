@@ -11,7 +11,6 @@ import (
 	"github.com/mjghr/tech-download-manager/config"
 	"github.com/mjghr/tech-download-manager/controller"
 	"github.com/mjghr/tech-download-manager/manager"
-	"github.com/mjghr/tech-download-manager/util"
 )
 
 func main() {
@@ -43,20 +42,7 @@ func main() {
 	// Create download controllers
 	dc1 := dm.NewDownloadController(url1)
 	dc2 := dm.NewDownloadController(url2)
-
-	// Get default paths
-	tempPath := util.GiveDefaultTempPath()
-	savePath := util.GiveDefaultSavePath()
-
-	// Create queue controller
-	queueID := fmt.Sprintf("queue-%d", time.Now().UnixNano())
-	queueCtrl := controller.NewQueueController(
-		queueID,
-		tempPath,
-		savePath,
-		2,        // Concurrent download limit
-		100*1024, // Speed limit (100KB/s)
-	)
+	queueCtrl := controller.NewQueueController("abbas")
 
 	// Add downloads to queue
 	queueCtrl.AddDownload(dc1)
