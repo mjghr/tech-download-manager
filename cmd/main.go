@@ -11,6 +11,7 @@ import (
 	"github.com/mjghr/tech-download-manager/ui/logs"
 )
 
+
 func main() {
 	// Load environment variables
 	config.LoadEnv()

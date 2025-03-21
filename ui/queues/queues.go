@@ -110,6 +110,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					logs.Log(fmt.Sprintf("Cancelled all downloads in queue: %s", queue.QueueName))
 					m.statusMessage = "Cancelled all downloads in queue"
 				}
+
 				m.showStatus = true
 				m.statusExpiry = now.Add(3 * time.Second)
 			}
@@ -128,6 +129,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.tables[m.activeTable].Focus()
 				// Force full screen refresh when switching queues
 				return m, tea.Batch(cmd, tea.ClearScreen)
+
 			default:
 				// Handle other keys by passing them to the active table
 				if m.activeTable < len(m.tables) {
@@ -295,9 +297,11 @@ func formatStatus(status controller.Status) string {
 	case controller.COMPLETED:
 		return "✓ Done"
 	case controller.ONGOING:
+
 		return "➤ Active"
 	case controller.CANCELED:
 		return "⊘ Cancelled"
+
 	default:
 		return "? Unknown"
 	}
@@ -349,6 +353,7 @@ func (m Model) View() string {
 			queueSelector.WriteString(" | ")
 		}
 	}
+
 
 	// Add the styled queue selector to the main view
 	sb.WriteString(selectorBoxStyle.Render(queueSelector.String()))
@@ -434,6 +439,7 @@ func (m Model) View() string {
 
 	// Render content inside the container to ensure consistent dimensions
 	return containerStyle.Render(sb.String())
+
 }
 
 // SetSize allows the parent model to pass the new window dimensions on resize.
@@ -466,6 +472,7 @@ func (m *Model) ToggleFocus() {
 		}
 	}
 }
+
 
 const helpText = `
 Controls:

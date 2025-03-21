@@ -161,6 +161,7 @@ func (m NewDownloadModel) Update(msg tea.Msg) (NewDownloadModel, tea.Cmd) {
 								// Save all queues to queues.json after adding download
 								if err := controller.SaveQueueControllers("queues.json", m.downloadManager.QueueList); err != nil {
 									logs.Log(fmt.Sprintf("Error saving queues: %v", err))
+
 								}
 
 								// Set success message

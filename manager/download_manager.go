@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mjghr/tech-download-manager/client"
+	"github.com/mjghr/tech-download-manager/config"
 	"github.com/mjghr/tech-download-manager/controller"
 	"github.com/mjghr/tech-download-manager/ui/logs"
 	"github.com/mjghr/tech-download-manager/util"
@@ -20,6 +21,10 @@ type DownloadManager struct {
 
 func (d *DownloadManager) AddQueue(queue *controller.QueueController) {
 	d.QueueList = append(d.QueueList, queue)
+}
+
+func (d *DownloadManager) SaveQueues() {
+	controller.SaveQueueControllers(config.JSON_ADDRESS, d.QueueList)
 }
 
 func (d *DownloadManager) NewDownloadController(urlPtr *url.URL) *controller.DownloadController {

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,7 +15,6 @@ import (
 	"github.com/mjghr/tech-download-manager/ui/newDownloads"
 	"github.com/mjghr/tech-download-manager/ui/newQueue"
 	"github.com/mjghr/tech-download-manager/ui/queues"
-	"github.com/mjghr/tech-download-manager/util"
 )
 
 // Add these new types near the top of the file
@@ -71,9 +69,11 @@ func (m AppModel) Init() tea.Cmd {
 	config.LoadEnv()
 	logs.Log("Welcome to Download Manager")
 
+
 	// Load existing queues from the JSON file
 	filename := "queues.json"
 	loadedQueues, err := controller.LoadQueueControllers(filename)
+
 	if err != nil {
 		logs.Log(fmt.Sprintf("Error loading queues: %v", err))
 	} else if len(loadedQueues) > 0 {
@@ -130,6 +130,7 @@ func (m AppModel) Init() tea.Cmd {
 		tea.ClearScreen,    // Clear the screen immediately
 		func() tea.Msg {
 			// Force an immediate window size update
+
 			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 		},
 	)
