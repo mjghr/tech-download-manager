@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +16,7 @@ import (
 	"github.com/mjghr/tech-download-manager/ui/newDownloads"
 	"github.com/mjghr/tech-download-manager/ui/newQueue"
 	"github.com/mjghr/tech-download-manager/ui/queues"
+	"github.com/mjghr/tech-download-manager/util"
 )
 
 // Add these new types near the top of the file
