@@ -1,4 +1,4 @@
-# Go Download Mangaer 
+# Go Download Mangaer - [Repositiry Link](https://github.com/mjghr/tech-download-manager)
 A file downloader that leverages Go concurrency to download public files off the Internet
 
 ## Features:
@@ -22,4 +22,3 @@ A file downloader that leverages Go concurrency to download public files off the
   <img src="https://iili.io/3zG9Pwl.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
 </div>
 
-### [Repositiry](https://github.com/mjghr/tech-download-manager)
