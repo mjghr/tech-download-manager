@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -20,25 +21,27 @@ const (
 	FAILED
 	COMPLETED
 	ONGOING
+	CANCELED
 )
 
 type DownloadController struct {
-	ID             string `json:"id"`
-	QueueID        string `json:"queueId"`
-	Url            string `json:"url"`
-	Status         Status `json:"status"`
-	FileName       string `json:"fileName"`
-	Chunks         [][2]int `json:"chunks"`
-	CompletedBytes []int `json:"completedBytes"`
-	TotalSize      int `json:"totalSize"`
+	ID             string             `json:"id"`
+	QueueID        string             `json:"queueId"`
+	Url            string             `json:"url"`
+	Status         Status             `json:"status"`
+	FileName       string             `json:"fileName"`
+	Chunks         [][2]int           `json:"chunks"`
+	CompletedBytes []int              `json:"completedBytes"`
+	TotalSize      int                `json:"totalSize"`
 	HttpClient     *client.HTTPClient `json:"httpClient"`
-	SpeedLimit     int `json:"speedLimit"`
+	SpeedLimit     int                `json:"speedLimit"`
 
-	PauseChan      chan bool `json:"-"`
-	Mutex          sync.Mutex `json:"-"`
-	ResumeChan     chan bool `json:"-"`
-	TokenBucket chan struct{} `json:"-"`
-
+	PauseChan   chan bool            `json:"-"`
+	Mutex       sync.Mutex           `json:"-"`
+	ResumeChan  chan bool            `json:"-"`
+	TokenBucket chan struct{}        `json:"-"`
+	CancelFuncs []context.CancelFunc `json:"-"`
+	ctx         context.Context      `json:"-"`
 }
 
 func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
@@ -70,8 +73,35 @@ func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
 	return arr
 }
 
-func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
-	logs.Log(fmt.Sprintf(("Starting download of chunk %d for %s (bytes %d-%d, speed limit: %d bytes/s)"), idx, d.FileName, byteChunk[0], byteChunk[1], d.SpeedLimit))
+func (d *DownloadController) Cancel(tmp string) {
+	d.Mutex.Lock()
+	defer d.Mutex.Unlock()
+
+	if d.Status == ONGOING || d.Status == PAUSED {
+		d.Status = CANCELED
+		logs.Log(fmt.Sprintf("Download %s has been canceled", d.ID))
+
+		// Cancel all ongoing goroutines
+		for _, cancelFunc := range d.CancelFuncs {
+			cancelFunc()
+		}
+
+		// Clean up temporary files
+		err := d.CleanupTmpFiles(tmp)
+		if err != nil {
+			logs.Log(fmt.Sprintf("Warning: failed to clean up temp files for %s: %v", d.ID, err))
+		}
+
+		// Notify any waiting goroutines
+		close(d.PauseChan)
+		close(d.ResumeChan)
+	} else {
+		logs.Log(fmt.Sprintf("Download %s is not ongoing or paused, no action taken", d.ID))
+	}
+}
+
+func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string, ctx context.Context) error {
+	logs.Log(fmt.Sprintf("Starting download of chunk %d for %s (bytes %d-%d, speed limit: %d bytes/s)", idx, d.FileName, byteChunk[0], byteChunk[1], d.SpeedLimit))
 
 	// Define chunk file
 	fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
@@ -110,67 +140,68 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	}
 	defer file.Close()
 
-	method := "GET"
 	headers := map[string]string{
 		"User-Agent": "tech-idm",
 		"Range":      fmt.Sprintf("bytes=%d-%d", byteChunk[0]+startOffset, byteChunk[1]),
 	}
 
-	logs.Log(fmt.Sprintf(("Sending HTTP request for chunk %d of %s"), idx, d.FileName))
-	resp, err := d.HttpClient.SendRequest(method, d.Url, headers)
+	resp, err := d.HttpClient.SendRequestWithContext(ctx, "GET", d.Url, headers)
 	if err != nil {
-		logs.Log(fmt.Sprintf(("Failed to send request for chunk %d of %s: %v"), idx, d.FileName, err))
+		logs.Log(fmt.Sprintf("Failed to send request for chunk %d of %s: %v", idx, d.FileName, err))
 		return fmt.Errorf("failed to send request for chunk %d: %w", idx, err)
-	}
-	if resp.StatusCode > 299 {
-		logs.Log(fmt.Sprintf(("Received invalid response for chunk %d of %s: status code %d"), idx, d.FileName, resp.StatusCode))
-		return fmt.Errorf("invalid response for chunk %d: status code %d", idx, resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
-	startTime := time.Now()
-	totalRead := startOffset
-	buffer := make([]byte, 32*1024) // 32 KB buffer for efficient reading
-
-	for {
-		d.checkPause() // Blocks if paused, ensuring pause time isn't counted
-
-		n, readErr := resp.Body.Read(buffer)
-		if n > 0 {
-			logs.Log(fmt.Sprintf(("Read %d bytes for chunk %d of %s"), n, idx, d.FileName))
-			_, writeErr := file.Write(buffer[:n])
-			if writeErr != nil {
-				logs.Log(fmt.Sprintf(("Failed to write %d bytes to file %s for chunk %d: %v"), n, fileName, idx, writeErr))
-				return fmt.Errorf("failed writing %d bytes to %s for chunk %d: %w", n, fileName, idx, writeErr)
-			}
-			totalRead += n
-			d.CompletedBytes[idx] = totalRead
-			logs.Log(fmt.Sprintf(("Chunk %d of %s: total bytes downloaded so far: %d"), idx, d.FileName, d.CompletedBytes[idx]))
-
-			if d.SpeedLimit > 0 {
-				expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds
-				elapsed := time.Since(startTime).Seconds()
-				if elapsed < expectedTime {
-					sleepDuration := time.Duration((expectedTime - elapsed) * float64(time.Second))
-					logs.Log(fmt.Sprintf(("Chunk %d of %s: sleeping for %.2f seconds to respect speed limit of %d bytes/s"), idx, d.FileName, sleepDuration.Seconds(), d.SpeedLimit))
-					time.Sleep(sleepDuration)
-				}
-			}
-		}
-
-		if readErr == io.EOF {
-			logs.Log(fmt.Sprintf(("Finished reading chunk %d of %s: reached EOF"), idx, d.FileName))
-			break
-		}
-		if readErr != nil {
-			logs.Log(fmt.Sprintf(("Error reading chunk %d of %s: %v"), idx, d.FileName, readErr))
-			return fmt.Errorf("error reading chunk %d of %s: %w", idx, d.FileName, readErr)
-		}
+	if resp.StatusCode > 299 {
+		logs.Log(fmt.Sprintf("Received invalid response for chunk %d of %s: status code %d", idx, d.FileName, resp.StatusCode))
+		return fmt.Errorf("invalid response for chunk %d: status code %d", idx, resp.StatusCode)
 	}
 
-	elapsed := time.Since(startTime).Seconds()
-	logs.Log(fmt.Sprintf(("Completed download of chunk %d for %s in %.2f seconds (total bytes: %d)"), idx, d.FileName, elapsed, totalRead))
-	return nil
+	startTime := time.Now()
+	totalRead := startOffset
+	buffer := make([]byte, 32*1024)
+
+	for {
+		select {
+		case <-ctx.Done():
+			logs.Log(fmt.Sprintf("Download of chunk %d for %s canceled", idx, d.FileName))
+			return ctx.Err()
+		default:
+			d.checkPause() 
+
+			n, readErr := resp.Body.Read(buffer)
+			if n > 0 {
+				logs.Log(fmt.Sprintf("Read %d bytes for chunk %d of %s", n, idx, d.FileName))
+				_, writeErr := file.Write(buffer[:n])
+				if writeErr != nil {
+					logs.Log(fmt.Sprintf("Failed to write %d bytes to file %s for chunk %d: %v", n, fileName, idx, writeErr))
+					return fmt.Errorf("failed writing %d bytes to %s for chunk %d: %w", n, fileName, idx, writeErr)
+				}
+				totalRead += n
+				d.CompletedBytes[idx] = totalRead
+				logs.Log(fmt.Sprintf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, d.CompletedBytes[idx]))
+
+				if d.SpeedLimit > 0 {
+					expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds
+					elapsed := time.Since(startTime).Seconds()
+					if elapsed < expectedTime {
+						sleepDuration := time.Duration((expectedTime - elapsed) * float64(time.Second))
+						logs.Log(fmt.Sprintf("Chunk %d of %s: sleeping for %.2f seconds to respect speed limit of %d bytes/s", idx, d.FileName, sleepDuration.Seconds(), d.SpeedLimit))
+						time.Sleep(sleepDuration)
+					}
+				}
+			}
+
+			if readErr == io.EOF {
+				logs.Log(fmt.Sprintf("Finished reading chunk %d of %s: reached EOF", idx, d.FileName))
+				return nil
+			}
+			if readErr != nil {
+				logs.Log(fmt.Sprintf("Error reading chunk %d of %s: %v", idx, d.FileName, readErr))
+				return fmt.Errorf("error reading chunk %d of %s: %w", idx, d.FileName, readErr)
+			}
+		}
+	}
 }
 
 func (d *DownloadController) MergeDownloads(dirPath, mergeDir string) error {
@@ -269,12 +300,11 @@ func (dc *DownloadController) SetStatus(newStatus Status) {
 	dc.Status = newStatus
 }
 
-
 func (d *DownloadController) Retry(idx int, byteChunk [2]int, tmpPath string, maxRetries int) error {
 	var err error
 	for retry := 0; retry < maxRetries; retry++ {
 		logs.Log(fmt.Sprintf("Attempting retry %d for chunk %d of %s", retry+1, idx, d.FileName))
-		err = d.Download(idx, byteChunk, tmpPath)
+		err = d.Download(idx, byteChunk, tmpPath, d.ctx)
 		if err == nil {
 			logs.Log(fmt.Sprintf("Successfully retried chunk %d of %s", idx, d.FileName))
 			return nil

@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -11,17 +13,17 @@ import (
 
 // QueueController manages a download queue with features like pause, resume, and concurrent download limits
 type QueueController struct {
-	QueueID                 string `json:"queueId"`
-	SpeedLimit              int `json:"speedLimit"`
-	ConcurrentDownloadLimit int `json:"concurrentDownloadLimit"`
-	StartTime               time.Time `json:"startTime"`
-	EndTime                 time.Time `json:"endTime"`
+	QueueID                 string                `json:"queueId"`
+	SpeedLimit              int                   `json:"speedLimit"`
+	ConcurrentDownloadLimit int                   `json:"concurrentDownloadLimit"`
+	StartTime               time.Time             `json:"startTime"`
+	EndTime                 time.Time             `json:"endTime"`
 	DownloadControllers     []*DownloadController `json:"downloadControllers"`
-	TempPath                string `json:"tempPath"`
-	SavePath                string `json:"savePath"`
-	
-	mutex                   sync.Mutex `json:"-"`
-	wg                      sync.WaitGroup `json:"-"`
+	TempPath                string                `json:"tempPath"`
+	SavePath                string                `json:"savePath"`
+
+	mutex sync.Mutex     `json:"-"`
+	wg    sync.WaitGroup `json:"-"`
 }
 
 // NewQueueController creates a new queue controller
@@ -60,15 +62,14 @@ func (qc *QueueController) Start() error {
 	return nil
 }
 
-// processDownload handles an individual download in the queue
 func (qc *QueueController) processDownload(dc *DownloadController) {
 	defer qc.wg.Done()
 
-	// Skip if already completed or failed
-	if dc.GetStatus() == COMPLETED || dc.GetStatus() == FAILED {
-		logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
-		return
-	}
+	// // Skip if already completed or failed
+	// if dc.GetStatus() == COMPLETED || dc.GetStatus() == FAILED {
+	// 	logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
+	// 	return
+	// }
 
 	// Wait for a slot to become available
 	qc.waitForDownloadSlot(dc)
@@ -99,6 +100,10 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	// Split file into chunks
 	chunks := dc.Chunks
 
+	ctx, cancel := context.WithCancel(context.Background())
+	dc.CancelFuncs = append(dc.CancelFuncs, cancel)
+	dc.ctx = ctx
+
 	// Download each chunk
 	var downloadErr error
 	var chunkWg sync.WaitGroup
@@ -111,11 +116,15 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 				logs.Log(fmt.Sprintf("Chunk %d for %s skipped: download not ONGOING", idx, dc.ID))
 				return
 			}
-			err := dc.Download(idx, byteChunk, qc.TempPath)
+			err := dc.Download(idx, byteChunk, qc.TempPath, ctx)
 			if err != nil {
 				logs.Log(fmt.Sprintf("Error downloading chunk %d for %s: %v", idx, dc.FileName, err))
+				if errors.Is(downloadErr, context.Canceled) {
+					dc.SetStatus(CANCELED)
+				} else {
+					dc.SetStatus(CANCELED)
+				}
 				downloadErr = err
-				dc.SetStatus(FAILED)
 			}
 		}(i, chunk)
 	}
@@ -123,9 +132,19 @@ func (qc *QueueController) processDownload(dc *DownloadController) {
 	// Wait for all chunks to complete
 	chunkWg.Wait()
 
-	// Check if download failed
 	if downloadErr != nil {
-		logs.Log(fmt.Sprintf("Download %s failed: %v", dc.ID, downloadErr))
+		if errors.Is(downloadErr, context.Canceled) {
+			logs.Log(fmt.Sprintf("Download %s canceled: %v", dc.ID, downloadErr))
+			dc.SetStatus(CANCELED)
+		} else {
+			logs.Log(fmt.Sprintf("Download %s failed: %v", dc.ID, downloadErr))
+			dc.SetStatus(FAILED)
+		}
+
+		// Clean up temporary files on failure or cancellation
+		if err := dc.CleanupTmpFiles(qc.TempPath); err != nil {
+			logs.Log(fmt.Sprintf("Warning: failed to clean up temp files for %s: %v", dc.ID, err))
+		}
 		return
 	}
 
@@ -289,4 +308,29 @@ func (qc *QueueController) SetPaths(tempPath, savePath string) error {
 	qc.SavePath = savePath
 	logs.Log(fmt.Sprintf("Updated paths for queue %s: temp=%s, save=%s", qc.QueueID, tempPath, savePath))
 	return nil
+}
+
+func (qc *QueueController) CancelDownload(downloadID string) error {
+	qc.mutex.Lock()
+	defer qc.mutex.Unlock()
+
+	for _, dc := range qc.DownloadControllers {
+		if dc.ID == downloadID {
+			dc.Cancel(qc.TempPath)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("download %s not found in queue", downloadID)
+}
+
+func (qc *QueueController) CancelAll() error {
+	qc.mutex.Lock()
+	defer qc.mutex.Unlock()
+
+	for _, dc := range qc.DownloadControllers {
+		dc.Cancel(qc.TempPath)
+	}
+
+	return fmt.Errorf("failed to cancel al downloads")
 }
