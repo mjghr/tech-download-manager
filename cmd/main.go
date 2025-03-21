@@ -7,7 +7,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/mjghr/tech-download-manager/config"
 	"github.com/mjghr/tech-download-manager/controller"
 	"github.com/mjghr/tech-download-manager/manager"
 	"github.com/mjghr/tech-download-manager/ui"
@@ -21,8 +20,6 @@ type model struct {
 
 // Init uses a pointer receiver to modify the original model.
 func (m *model) Init() tea.Cmd {
-	config.LoadEnv()
-	logs.Log(fmt.Sprintf((config.WELCOME_MESSAGE)))
 
 	url1, err1 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/3/31/Napoleon_I_of_France_by_Andrea_Appiani.jpg")
 	url2, err2 := url.Parse("https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg/640px-David_-_Napoleon_crossing_the_Alps_-_Malmaison1.jpg")

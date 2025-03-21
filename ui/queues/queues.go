@@ -223,8 +223,34 @@ func (m *Model) ToggleFocus() {
 	}
 }
 
-// Add styles
-var headerStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("205")).
-	PaddingLeft(2)
+// Add this method to update the table with real queue data
+func (m *Model) UpdateQueues(queues []*controller.QueueController) {
+	m.queues = queues
+
+	// Convert queue data into table rows
+	rows := []table.Row{}
+	for _, queue := range queues {
+		startTime := "--:--:--"
+		endTime := "--:--:--"
+
+		// Format start and end times if they are set
+		if !queue.StartTime.IsZero() {
+			startTime = queue.StartTime.Format("15:04:05")
+		}
+		if !queue.EndTime.IsZero() {
+			endTime = queue.EndTime.Format("15:04:05")
+		}
+
+		// Add a row for each queue
+		rows = append(rows, table.Row{
+			queue.QueueID,
+			fmt.Sprintf("%d KB/s", queue.SpeedLimit/1024), // Convert speed limit to KB/s
+			fmt.Sprintf("%d", queue.ConcurrentDownloadLimit),
+			startTime,
+			endTime,
+		})
+	}
+
+	// Update the table with the new rows
+	m.table.SetRows(rows)
+}
