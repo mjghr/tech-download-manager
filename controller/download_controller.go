@@ -23,19 +23,22 @@ const (
 )
 
 type DownloadController struct {
-	ID             string
-	QueueID        string
-	Url            string
-	Status         Status
-	FileName       string
-	Chunks         [][2]int
-	CompletedBytes []int
-	TotalSize      int
-	HttpClient     *client.HTTPClient
-	SpeedLimit     int
-	PauseChan      chan bool
-	Mutex          sync.Mutex
-	ResumeChan     chan bool
+	ID             string `json:"id"`
+	QueueID        string `json:"queueId"`
+	Url            string `json:"url"`
+	Status         Status `json:"status"`
+	FileName       string `json:"fileName"`
+	Chunks         [][2]int `json:"chunks"`
+	CompletedBytes []int `json:"completedBytes"`
+	TotalSize      int `json:"totalSize"`
+	HttpClient     *client.HTTPClient `json:"httpClient"`
+	SpeedLimit     int `json:"speedLimit"`
+
+	PauseChan      chan bool `json:"-"`
+	Mutex          sync.Mutex `json:"-"`
+	ResumeChan     chan bool `json:"-"`
+	TokenBucket chan struct{} `json:"-"`
+
 }
 
 func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
@@ -69,10 +72,48 @@ func (d *DownloadController) SplitIntoChunks(workers, chunkSize int) [][2]int {
 
 func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string) error {
 	logs.Log(fmt.Sprintf(("Starting download of chunk %d for %s (bytes %d-%d, speed limit: %d bytes/s)"), idx, d.FileName, byteChunk[0], byteChunk[1], d.SpeedLimit))
+
+	// Define chunk file
+	fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
+	logs.Log(fmt.Sprintf("Creating temporary file for chunk %d: %s", idx, fileName))
+
+	// Check if the file already exists
+	var file *os.File
+	var err error
+	var startOffset int
+
+	if _, err := os.Stat(fileName); err == nil {
+		// File exists, open it in append mode
+		file, err = os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			logs.Log(fmt.Sprintf("Failed to open file %s for chunk %d: %v", fileName, idx, err))
+			return fmt.Errorf("failed to open file %s for chunk %d: %w", fileName, idx, err)
+		}
+
+		// Get the current size of the file
+		fileInfo, err := file.Stat()
+		if err != nil {
+			logs.Log(fmt.Sprintf("Failed to get file info for %s: %v", fileName, err))
+			return fmt.Errorf("failed to get file info for %s: %w", fileName, err)
+		}
+		startOffset = int(fileInfo.Size())
+		logs.Log(fmt.Sprintf("Resuming download of chunk %d from byte %d", idx, startOffset))
+	} else {
+		// File does not exist, create it
+		file, err = os.Create(fileName)
+		if err != nil {
+			logs.Log(fmt.Sprintf("Failed to create file %s for chunk %d: %v", fileName, idx, err))
+			return fmt.Errorf("failed to create file %s for chunk %d: %w", fileName, idx, err)
+		}
+		startOffset = 0
+		logs.Log(fmt.Sprintf("Starting new download of chunk %d", idx))
+	}
+	defer file.Close()
+
 	method := "GET"
 	headers := map[string]string{
 		"User-Agent": "tech-idm",
-		"Range":      fmt.Sprintf("bytes=%d-%d", byteChunk[0], byteChunk[1]),
+		"Range":      fmt.Sprintf("bytes=%d-%d", byteChunk[0]+startOffset, byteChunk[1]),
 	}
 
 	logs.Log(fmt.Sprintf(("Sending HTTP request for chunk %d of %s"), idx, d.FileName))
@@ -87,18 +128,8 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string)
 	}
 	defer resp.Body.Close()
 
-	// Define chunk file
-	fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
-	logs.Log(fmt.Sprintf(("Creating temporary file for chunk %d: %s"), idx, fileName))
-	file, err := os.Create(fileName)
-	if err != nil {
-		logs.Log(fmt.Sprintf(("Failed to create file %s for chunk %d: %v"), fileName, idx, err))
-		return fmt.Errorf("failed to create file %s for chunk %d: %w", fileName, idx, err)
-	}
-	defer file.Close()
-
 	startTime := time.Now()
-	totalRead := 0
+	totalRead := startOffset
 	buffer := make([]byte, 32*1024) // 32 KB buffer for efficient reading
 
 	for {
@@ -236,4 +267,20 @@ func (dc *DownloadController) SetStatus(newStatus Status) {
 	dc.Mutex.Lock()
 	defer dc.Mutex.Unlock()
 	dc.Status = newStatus
+}
+
+
+func (d *DownloadController) Retry(idx int, byteChunk [2]int, tmpPath string, maxRetries int) error {
+	var err error
+	for retry := 0; retry < maxRetries; retry++ {
+		logs.Log(fmt.Sprintf("Attempting retry %d for chunk %d of %s", retry+1, idx, d.FileName))
+		err = d.Download(idx, byteChunk, tmpPath)
+		if err == nil {
+			logs.Log(fmt.Sprintf("Successfully retried chunk %d of %s", idx, d.FileName))
+			return nil
+		}
+		logs.Log(fmt.Sprintf("Retry %d for chunk %d failed: %v", retry+1, idx, err))
+		time.Sleep(time.Second * 2) // Wait before retrying
+	}
+	return fmt.Errorf("failed to download chunk %d after %d retries: %w", idx, maxRetries, err)
 }

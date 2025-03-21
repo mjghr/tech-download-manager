@@ -39,9 +39,9 @@ func (d *DownloadManager) DownloadQueue(queue *controller.QueueController) {
 	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, queue.ConcurrenDownloadtLimit) // Limit concurrent downloads
+	sem := make(chan struct{}, queue.ConcurrentDownloadLimit) // Limit concurrent downloads
 	logs.Log(fmt.Sprintf("Starting download queue %s with %d concurrent download limit",
-		queue.QueueID, queue.ConcurrenDownloadtLimit))
+		queue.QueueID, queue.ConcurrentDownloadLimit))
 
 	for i := range queue.DownloadControllers {
 		wg.Add(1)
@@ -145,6 +145,12 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 			if err != nil {
 				logs.Log(fmt.Sprintf("Failed to download chunk %d for %s: %v", idx, fileName, err))
 				downloadController.Status = controller.FAILED
+				logs.Log(fmt.Sprintf("Chunk %d failed: %v, retrying...", idx, err))
+				retryErr := downloadController.Retry(idx, byteChunk, tmpPath, 10)
+				if retryErr != nil {
+					logs.Log(fmt.Sprintf("Chunk %d failed after retries: %v", idx, retryErr))
+					downloadController.SetStatus(controller.FAILED)
+				}
 			}
 		}(idx, byteChunk)
 	}
