@@ -32,11 +32,13 @@ type AppModel struct {
 
 // NewAppModel initializes the root model with default values.
 func NewAppModel() AppModel {
+	dm := &manager.DownloadManager{}
+
 	return AppModel{
 		tabs:            []string{"Queues", "Guide", "Logs"},
 		activeTab:       0,
 		footerText:      "Press Tab to switch tabs | Press ESC to toggle focus | Press Q to quit",
-		downloadManager: &manager.DownloadManager{},
+		downloadManager: dm,
 
 		// Create each sub-model
 		queuesModel: queues.NewModel(),
@@ -83,7 +85,6 @@ func (m AppModel) Init() tea.Cmd {
 
 	// Update queues model with the new queue
 	m.queuesModel.UpdateQueues(m.downloadManager.QueueList)
-
 	return tea.Batch(
 		m.logsModel.Init(),
 		// Add any other initialization commands

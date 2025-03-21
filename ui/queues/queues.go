@@ -1,6 +1,8 @@
 package queues
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mjghr/tech-download-manager/controller"
@@ -15,34 +17,29 @@ type Model struct {
 	queues  []*controller.QueueController
 }
 
-// NewModel creates a new Queues model with a sample table of downloads.
+// Update the NewModel function to initialize an empty table
 func NewModel() Model {
 	// Define columns
 	columns := []table.Column{
-		{Title: "File", Width: 20},
-		{Title: "Status", Width: 10},
-		{Title: "Progress", Width: 10},
+		{Title: "Queue ID", Width: 20},
+		{Title: "Speed Limit", Width: 15},
+		{Title: "Concurrent Limit", Width: 18},
+		{Title: "Start Time", Width: 20},
+		{Title: "End Time", Width: 20},
 	}
 
-	// Define some sample rows
-	rows := []table.Row{
-		{"file1.zip", "downloading", "56%"},
-		{"video.mp4", "paused", "22%"},
-		{"music.mp3", "complete", "100%"},
-		{"image.png", "downloading", "10%"},
-	}
-
+	// Initialize an empty table with no rows
 	t := table.New(
 		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(true), // start focused by default
+		table.WithRows([]table.Row{}), // Start with no rows
+		table.WithFocused(true),       // Start focused by default
 		table.WithHeight(7),
 	)
 
-	// You can customize table styles here or rely on your global style
 	return Model{
 		table:   t,
 		focused: true,
+		queues:  []*controller.QueueController{},
 	}
 }
 
@@ -62,7 +59,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, cmd
 }
 
-// View returns a string representation of this tab’s UI.
+// Update the View function to display the table
 func (m Model) View() string {
 	return m.table.View()
 }
@@ -88,9 +85,34 @@ func (m *Model) ToggleFocus() {
 	}
 }
 
-// Add this new method
+// Add this method to update the table with real queue data
 func (m *Model) UpdateQueues(queues []*controller.QueueController) {
 	m.queues = queues
-	// Update the table or other UI elements with the queue information
-	// This will depend on how you want to display the queues
+
+	// Convert queue data into table rows
+	rows := []table.Row{}
+	for _, queue := range queues {
+		startTime := "--:--:--"
+		endTime := "--:--:--"
+
+		// Format start and end times if they are set
+		if !queue.StartTime.IsZero() {
+			startTime = queue.StartTime.Format("15:04:05")
+		}
+		if !queue.EndTime.IsZero() {
+			endTime = queue.EndTime.Format("15:04:05")
+		}
+
+		// Add a row for each queue
+		rows = append(rows, table.Row{
+			queue.QueueID,
+			fmt.Sprintf("%d KB/s", queue.SpeedLimit/1024), // Convert speed limit to KB/s
+			fmt.Sprintf("%d", queue.ConcurrenDownloadtLimit),
+			startTime,
+			endTime,
+		})
+	}
+
+	// Update the table with the new rows
+	m.table.SetRows(rows)
 }
