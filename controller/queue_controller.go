@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/mjghr/tech-download-manager/client"
 	"github.com/mjghr/tech-download-manager/ui/logs"
 	"github.com/mjghr/tech-download-manager/util"
 )
@@ -72,20 +74,34 @@ func (qc *QueueController) Start() error {
 		return fmt.Errorf("failed to create save directory: %w", err)
 	}
 
+	// Start each download in the queue but don't wait for completion
 	for _, dc := range qc.DownloadControllers {
-		qc.wg.Add(1)
-		go qc.processDownload(dc)
+		// Skip already completed downloads
+		if dc.GetStatus() == COMPLETED {
+			logs.Log(fmt.Sprintf("Download %s skipped: already completed", dc.ID))
+			continue
+		}
+
+		// Start each download in a background goroutine
+		go func(downloadCtrl *DownloadController) {
+			qc.wg.Add(1)
+			defer qc.wg.Done()
+			qc.processDownload(downloadCtrl)
+		}(dc)
 	}
 
-	qc.wg.Wait()
-	logs.Log(fmt.Sprintf("Queue %s processing completed", qc.QueueID))
+	logs.Log(fmt.Sprintf("Queue %s processing started in background", qc.QueueID))
 	return nil
 }
 
-func (qc *QueueController) processDownload(dc *DownloadController) {
-	defer qc.wg.Done()
+// WaitForCompletion can be used if you need to wait for all downloads to complete
+func (qc *QueueController) WaitForCompletion() {
+	qc.wg.Wait()
+	logs.Log(fmt.Sprintf("Queue %s processing completed", qc.QueueID))
+}
 
-	// // Skip if already completed or failed
+func (qc *QueueController) processDownload(dc *DownloadController) {
+	// Skip if already completed or failed
 	if dc.GetStatus() == COMPLETED {
 		logs.Log(fmt.Sprintf("Download %s skipped: already %v", dc.ID, dc.GetStatus()))
 		return
@@ -263,6 +279,9 @@ func (qc *QueueController) AddDownload(dc *DownloadController) {
 	qc.mutex.Lock()
 	defer qc.mutex.Unlock()
 
+	// Set the queue ID on the download controller to maintain the relationship
+	dc.QueueID = qc.QueueID
+
 	qc.DownloadControllers = append(qc.DownloadControllers, dc)
 	logs.Log(fmt.Sprintf("Added download %s to queue %s", dc.ID, qc.QueueID))
 }
@@ -344,6 +363,7 @@ func (qc *QueueController) CancelDownload(downloadID string) error {
 	return fmt.Errorf("download %s not found in queue", downloadID)
 }
 
+// CancelAll cancels all downloads in the queue
 func (qc *QueueController) CancelAll() error {
 	qc.mutex.Lock()
 	defer qc.mutex.Unlock()
@@ -353,4 +373,139 @@ func (qc *QueueController) CancelAll() error {
 	}
 
 	return fmt.Errorf("failed to cancel al downloads")
+}
+
+// StartDownload immediately starts a specific download
+func (qc *QueueController) StartDownload(downloadID string) error {
+	// Check if temp and save directories exist, create if not
+	if err := os.MkdirAll(qc.TempPath, 0755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	if err := os.MkdirAll(qc.SavePath, 0755); err != nil {
+		return fmt.Errorf("failed to create save directory: %w", err)
+	}
+
+	// Look for the specified download
+	var targetDC *DownloadController
+	for _, dc := range qc.DownloadControllers {
+		if dc.ID == downloadID {
+			targetDC = dc
+			break
+		}
+	}
+
+	if targetDC == nil {
+		return fmt.Errorf("download %s not found in queue", downloadID)
+	}
+
+	// Set status to ONGOING
+	targetDC.SetStatus(ONGOING)
+
+	// Set speed limit from queue if not set individually
+	if targetDC.SpeedLimit == 0 {
+		targetDC.SpeedLimit = qc.SpeedLimit
+	}
+
+	// Ensure the QueueID is set
+	targetDC.QueueID = qc.QueueID
+
+	// Initialize HttpClient if it's nil
+	if targetDC.HttpClient == nil {
+		targetDC.HttpClient = &client.HTTPClient{}
+	}
+
+	// If FileName is empty, extract it from the URL
+	if targetDC.FileName == "" {
+		parts := strings.Split(targetDC.Url, "/")
+		if len(parts) > 0 {
+			targetDC.FileName = parts[len(parts)-1]
+			if targetDC.FileName == "" {
+				targetDC.FileName = "download-" + targetDC.ID
+			}
+		} else {
+			targetDC.FileName = "download-" + targetDC.ID
+		}
+		logs.Log(fmt.Sprintf("Set filename to %s for download %s", targetDC.FileName, targetDC.ID))
+	}
+
+	// Start the download in a goroutine
+	go func() {
+		qc.wg.Add(1)
+		defer qc.wg.Done()
+
+		logs.Log(fmt.Sprintf("Starting download %s in queue %s", targetDC.ID, qc.QueueID))
+
+		// Create context for this download
+		ctx, cancel := context.WithCancel(context.Background())
+		targetDC.CancelFuncs = append(targetDC.CancelFuncs, cancel)
+		targetDC.ctx = ctx
+
+		// Split file into chunks if needed and not already done
+		if targetDC.Chunks == nil || len(targetDC.Chunks) == 0 {
+			// Use default chunk size (same as in Download method)
+			chunkSize := targetDC.TotalSize
+			workers := 1
+			if targetDC.TotalSize > 5*1024*1024 { // 5MB
+				workers = 5
+				chunkSize = targetDC.TotalSize / workers
+			}
+			targetDC.Chunks = targetDC.SplitIntoChunks(workers, chunkSize)
+			targetDC.CompletedBytes = make([]int, len(targetDC.Chunks))
+		}
+
+		// Download each chunk
+		var downloadErr error
+		var chunkWg sync.WaitGroup
+
+		for i, chunk := range targetDC.Chunks {
+			chunkWg.Add(1)
+			go func(idx int, byteChunk [2]int) {
+				defer chunkWg.Done()
+				if targetDC.GetStatus() != ONGOING { // Check status before proceeding
+					logs.Log(fmt.Sprintf("Chunk %d for %s skipped: download not ONGOING", idx, targetDC.ID))
+					return
+				}
+				err := targetDC.Download(idx, byteChunk, qc.TempPath, ctx)
+				if err != nil {
+					logs.Log(fmt.Sprintf("Error downloading chunk %d for %s: %v", idx, targetDC.FileName, err))
+					if errors.Is(err, context.Canceled) {
+						targetDC.SetStatus(CANCELED)
+					} else {
+						targetDC.SetStatus(FAILED)
+					}
+					downloadErr = err
+				}
+			}(i, chunk)
+		}
+
+		// Wait for all chunks to complete
+		chunkWg.Wait()
+
+		// Check for errors
+		if downloadErr != nil {
+			logs.Log(fmt.Sprintf("Download %s had errors: %v", targetDC.ID, downloadErr))
+			return
+		}
+
+		// If all chunks completed successfully and we're still in ONGOING state, merge them
+		if targetDC.GetStatus() == ONGOING {
+			if err := targetDC.MergeDownloads(qc.TempPath, qc.SavePath); err != nil {
+				logs.Log(fmt.Sprintf("Error merging download %s: %v", targetDC.ID, err))
+				targetDC.SetStatus(FAILED)
+				return
+			}
+
+			// Clean up temp files
+			if err := targetDC.CleanupTmpFiles(qc.TempPath); err != nil {
+				logs.Log(fmt.Sprintf("Warning: failed to clean up temp files for %s: %v", targetDC.ID, err))
+			}
+
+			// Mark as completed
+			targetDC.SetStatus(COMPLETED)
+			logs.Log(fmt.Sprintf("Download %s completed successfully", targetDC.ID))
+		}
+	}()
+
+	logs.Log(fmt.Sprintf("Immediately started download %s in queue %s", downloadID, qc.QueueID))
+	return nil
 }

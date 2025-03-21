@@ -103,6 +103,12 @@ func (d *DownloadController) Cancel(tmp string) {
 func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string, ctx context.Context) error {
 	logs.Log(fmt.Sprintf("Starting download of chunk %d for %s (bytes %d-%d, speed limit: %d bytes/s)", idx, d.FileName, byteChunk[0], byteChunk[1], d.SpeedLimit))
 
+	// Check if HttpClient is initialized
+	if d.HttpClient == nil {
+		logs.Log(fmt.Sprintf("HTTP client for download %s is nil, initializing it", d.ID))
+		d.HttpClient = &client.HTTPClient{}
+	}
+
 	// Define chunk file
 	fileName := fmt.Sprintf("%s/%s-%s-%d.tmp", tmpPath, config.TMP_FILE_PREFIX, d.FileName, idx)
 	logs.Log(fmt.Sprintf("Creating temporary file for chunk %d: %s", idx, fileName))
@@ -178,8 +184,17 @@ func (d *DownloadController) Download(idx int, byteChunk [2]int, tmpPath string,
 					return fmt.Errorf("failed writing %d bytes to %s for chunk %d: %w", n, fileName, idx, writeErr)
 				}
 				totalRead += n
-				d.CompletedBytes[idx] = totalRead
-				logs.Log(fmt.Sprintf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, d.CompletedBytes[idx]))
+
+				// Ensure CompletedBytes is initialized
+				if d.CompletedBytes == nil {
+					d.CompletedBytes = make([]int, len(d.Chunks))
+				}
+				if idx < len(d.CompletedBytes) {
+					d.CompletedBytes[idx] = totalRead
+					logs.Log(fmt.Sprintf("Chunk %d of %s: total bytes downloaded so far: %d", idx, d.FileName, d.CompletedBytes[idx]))
+				} else {
+					logs.Log(fmt.Sprintf("Warning: Chunk index %d is out of bounds for CompletedBytes array (length %d)", idx, len(d.CompletedBytes)))
+				}
 
 				if d.SpeedLimit > 0 {
 					expectedTime := float64(totalRead) / float64(d.SpeedLimit) // seconds

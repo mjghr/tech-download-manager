@@ -10,6 +10,7 @@ import (
 	"github.com/mjghr/tech-download-manager/config"
 	"github.com/mjghr/tech-download-manager/controller"
 	"github.com/mjghr/tech-download-manager/manager"
+	"github.com/mjghr/tech-download-manager/ui/downloads"
 	"github.com/mjghr/tech-download-manager/ui/guide"
 	"github.com/mjghr/tech-download-manager/ui/logs"
 	"github.com/mjghr/tech-download-manager/ui/newDownloads"
@@ -38,10 +39,11 @@ type AppModel struct {
 	ready           bool
 
 	// Sub-models (each tab)
-	queuesModel      queues.Model
-	guideModel       guide.Model
-	newDownloadModel newDownloads.NewDownloadModel
-	newQueueModel    newQueue.NewQueueModel
+	queuesModel        queues.Model
+	guideModel         guide.Model
+	newDownloadModel   newDownloads.NewDownloadModel
+	newQueueModel      newQueue.NewQueueModel
+	downloadsListModel downloads.Model
 }
 
 // NewAppModel initializes the root model with default values.
@@ -49,17 +51,18 @@ func NewAppModel() AppModel {
 	dm := &manager.DownloadManager{}
 
 	return AppModel{
-		tabs:            []string{"NewDownload", "NewQueue", "Queues", "Guide"},
+		tabs:            []string{"NewDownload", "NewQueue", "Queues", "Downloads", "Guide"},
 		activeTab:       0,
 		footerText:      "Press Tab to switch tabs | Press ESC to toggle focus | Press Q to quit",
 		downloadManager: dm,
 		ready:           false,
 
 		// Create each sub-model
-		queuesModel:      queues.NewModel(),
-		guideModel:       guide.NewModel(),
-		newDownloadModel: newDownloads.NewModel(dm),
-		newQueueModel:    newQueue.NewModel(dm),
+		queuesModel:        queues.NewModel(),
+		guideModel:         guide.NewModel(),
+		newDownloadModel:   newDownloads.NewModel(dm),
+		newQueueModel:      newQueue.NewModel(dm),
+		downloadsListModel: downloads.NewModel(),
 	}
 }
 
@@ -141,6 +144,7 @@ func (m *AppModel) updateModels() {
 	// Update all models that need the queue list
 	m.queuesModel.UpdateQueues(m.downloadManager.QueueList)
 	m.newDownloadModel.UpdateQueues(m.downloadManager.QueueList)
+	m.downloadsListModel.UpdateDownloads(m.downloadManager.QueueList)
 }
 
 // Update implements tea.Model and handles incoming messages.
@@ -160,6 +164,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.guideModel.SetSize(m.width, m.height)
 		m.newQueueModel.SetSize(m.width, m.height)
 		m.newDownloadModel.SetSize(m.width, m.height)
+		m.downloadsListModel.SetSize(m.width, m.height)
 
 	case tickMsg:
 		// Update all models with current queue state every tick
@@ -224,6 +229,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, tea.ClearScreen)
 			}
 		case 3:
+			// For the downloads list tab
+			m.downloadsListModel, cmd = m.downloadsListModel.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// For operation keys like delete, pause, resume, retry, ensure we update immediately
+			if key := msg.String(); key == "d" || key == "delete" || key == "p" || key == "r" || key == "t" || key == "s" {
+				// Ensure the download data is updated right away
+				m.updateModels()
+				// Force refresh the screen
+				cmds = append(cmds, tea.ClearScreen)
+			}
+		case 4:
 			m.guideModel, cmd = m.guideModel.Update(msg)
 			cmds = append(cmds, cmd)
 		}
@@ -247,6 +264,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.newQueueModel, cmd = m.newQueueModel.Update(msg)
 	cmds = append(cmds, cmd)
 
+	m.downloadsListModel, cmd = m.downloadsListModel.Update(msg)
+	cmds = append(cmds, cmd)
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -260,6 +280,8 @@ func (m *AppModel) toggleFocusOnActive() {
 	case 2:
 		m.queuesModel.ToggleFocus()
 	case 3:
+		m.downloadsListModel.ToggleFocus()
+	case 4:
 		m.guideModel.ToggleFocus()
 	}
 }
@@ -283,6 +305,8 @@ func (m AppModel) View() string {
 	case 2:
 		content = m.queuesModel.View()
 	case 3:
+		content = m.downloadsListModel.View()
+	case 4:
 		content = m.guideModel.View()
 	}
 
@@ -317,13 +341,15 @@ func (m AppModel) getFooterText() string {
 	case 0: // NewDownload tab
 		return "Tab: switch tabs | ESC: toggle focus | F5: switch input | Enter: add download | Q: quit"
 	case 1: // NewQueue tab
-		return "Tab: switch tabs | ESC: toggle focus | F6: switch input | Enter: create queue | Q: quit"
+		return "Tab: switch tabs | ESC: toggle focus | Enter: submit | Q: quit"
 	case 2: // Queues tab
-		return "Tab: switch tabs | ESC: toggle focus | j: cycle queues | ↑/↓: navigate | F1-F4: control queue | Q: quit"
-	case 3: // Guide tab
-		return "Tab: switch tabs | ESC: toggle focus | ↑/↓: scroll guide | Q: quit"
+		return "Tab: switch tabs | ESC: toggle focus | F1: start all | F2: pause all | F3: resume all | F4: cancel all | J: next queue | Q: quit"
+	case 3: // Downloads tab
+		return "Tab: switch tabs | ESC: toggle focus | S: start | D: delete | P: pause | R: resume | T: retry | Q: quit"
+	case 4: // Guide tab
+		return "Tab: switch tabs | ↑/↓: scroll | Q: quit"
 	default:
-		return "Press Tab to switch tabs | Press ESC to toggle focus | Press Q to quit"
+		return m.footerText
 	}
 }
 
