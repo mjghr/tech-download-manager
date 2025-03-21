@@ -1,8 +1,9 @@
-#    تمرین سری 1 - تکنولوژی کامیپیوتر
+# Go Download Mangaer 
+A file downloader that leverages Go concurrency to download public files off the Internet
 
-   اعضای تیم:
-   + نیما علیقارداشی 401100466
-   + محمد جواد قره‌گوزلو - 401170134 - mjghrfr@gmail.com
-   + شایگان ادیم 401109971
+### Contributors:
++ Nima Alighardashi - 401100466
++ Mohammad Javad Gharegozlou - 401170134 - mjghrfr@gmail.com 
++ Shaygan Adim - 401109971
 
-https://github.com/mjghr/tech-download-manager
+### [Repositiry](https://github.com/mjghr/tech-download-manager)
