@@ -135,8 +135,12 @@ func (d *DownloadManager) StartDownload(downloadController *controller.DownloadC
 			log.Printf("Starting download of chunk %d for %s (bytes %d-%d)", idx, fileName, byteChunk[0], byteChunk[1])
 			err := downloadController.Download(idx, byteChunk, tmpPath)
 			if err != nil {
-				log.Printf("Failed to download chunk %d for %s: %v", idx, fileName, err)
-				downloadController.Status = controller.FAILED
+				log.Printf("Chunk %d failed: %v, retrying...", idx, err)
+				retryErr := downloadController.Retry(idx, byteChunk, tmpPath, 10)
+				if retryErr != nil {
+					log.Printf("Chunk %d failed after retries: %v", idx, retryErr)
+					downloadController.SetStatus(controller.FAILED)
+				}
 			}
 		}(idx, byteChunk)
 	}
