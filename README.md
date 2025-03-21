@@ -16,4 +16,10 @@ A file downloader that leverages Go concurrency to download public files off the
 + Mohammad Javad Gharegozlou - 401170134 - mjghrfr@gmail.com 
 + Shaygan Adim - 401109971
 
+<div style="display: flex; gap: 25px;">
+  <img src="https://iili.io/3zG949f.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
+  <img src="https://iili.io/3zG96u4.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
+  <img src="https://iili.io/3zG9Pwl.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
+</div>
+
 ### [Repositiry](https://github.com/mjghr/tech-download-manager)
