@@ -1,13 +1,13 @@
 [
   {
-    "queueId": "queue-1742583829044341400",
+    "queueId": "queue-1742584028983668300",
     "speedLimit": 102400,
     "concurrentDownloadLimit": 1,
-    "startTime": "2025-03-21T22:33:49.0443414+03:30",
-    "endTime": "2025-03-22T22:33:49.0443414+03:30",
+    "startTime": "2025-03-21T22:37:08.9836683+03:30",
+    "endTime": "2025-03-22T22:37:08.9836683+03:30",
     "downloadControllers": [
       {
-        "id": "dc-1742583846707220900",
+        "id": "dc-1742584033333588800",
         "queueId": "",
         "url": "https://s1.netpaak.ir/GAME/Marvels.Spider-Man.2-RUNE_VGd",
         "status": 0,
@@ -28,6 +28,6 @@
     ],
     "tempPath": "C:\\Users\\Mahan Gh\\Desktop\\tmp",
     "savePath": "C:\\Users\\Mahan Gh\\Desktop\\download",
-    "name": "newQueue"
+    "name": "DefaultQueue"
   }
 ]

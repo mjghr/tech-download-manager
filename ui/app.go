@@ -72,7 +72,7 @@ func (m AppModel) Init() tea.Cmd {
 	for _, queue := range loadedQueues {
 		m.downloadManager.AddQueue(queue)
 	}
-	queueCtrl := controller.NewQueueController("newQueue")
+	queueCtrl := controller.NewQueueController("DefaultQueue")
 	m.downloadManager.AddQueue(queueCtrl)
 
 	logs.Log(fmt.Sprintf("Updating queues model with %d queues", len(m.downloadManager.QueueList)))
