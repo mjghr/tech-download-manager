@@ -1,50 +1,88 @@
-# Go Download Mangaer - [Repositiry Link](https://github.com/mjghr/tech-download-manager)
-A file downloader that leverages Go concurrency to download public files off the Internet
+# Tech Download Manager
 
-## Features:
-+ **Concurrent** Downloads: Split files into chunks and download them concurrently for faster downloads.
-+ **Pause/Resume**: Pause and resume downloads at any time.
-+ **Speed Limit**: Set download speed limits to control bandwidth usage.
-+ **Queue Management**: Manage multiple downloads in a queue with configurable concurrency limits.
-+ **Progress Tracking**: Track download progress in real-time.
-+ **Time Window**: Schedule downloads to run within a specific time window.
-+ **Temporary Files**: Use temporary files for resumable downloads and cleanup after completion.
-+ **Error Handling**: Retry failed chunks and handle errors gracefully.
+A high-performance file download manager built with Go, featuring concurrent downloads, pause/resume functionality, and advanced queue management.
 
-## Implementation:
-We might be tempted to GET the entire file at once, but if it is a large file, it can cause certain limitations, which are mitigated if we Divide and Conquer i.e, we break down the large file into certain C chunks and GET each of the C chunks individually. Also, it has other merits.
+[![Go Version](https://img.shields.io/badge/Go-1.23.4-blue.svg)](https://golang.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## How to Run:
+## Features
 
-Follow these steps to set up and alos before running the application, Ensure you’re using Go 1.20 or higher
+- **Concurrent Downloads**: Split files into chunks and download them concurrently for maximum speed
+- **Pause/Resume**: Pause and resume downloads at any time without losing progress
+- **Speed Limiting**: Control bandwidth usage with configurable speed limits
+- **Queue Management**: Manage multiple downloads with configurable concurrency limits
+- **Real-time Progress**: Track download progress with detailed statistics
+- **Scheduled Downloads**: Run downloads within specific time windows
+- **Temporary Files**: Use temporary files for resumable downloads with automatic cleanup
+- **Error Handling**: Automatic retry of failed chunks with graceful error handling
+- **Modern TUI**: Beautiful terminal user interface built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
 
-### Step 1: Clone the Repository
+## Installation
 
-Clone the TDM repository to your local machine:
+### Prerequisites
+- Go 1.23.4 or higher
+- Git
 
+### Building from Source
+
+1. Clone the repository:
 ```bash
 git clone https://github.com/mjghr/tech-download-manager.git
 cd tech-download-manager
 ```
 
-### Step 2: Run the code
-
-run the programm using this command
-
+2. Build and run:
 ```bash
 go run cmd/main.go
 ```
-### Step 3: 
-use the app as you see fit
 
-## Contributors:
-+ Nima Alighardashi - 401100466
-+ Mohammad Javad Gharegozlou - 401170134 - mjghrfr@gmail.com 
-+ Shaygan Adim - 401109971
+## Usage
+
+1. Launch the application using the command above
+2. Use the intuitive TUI interface to:
+   - Add new downloads
+   - Manage download queues
+   - Monitor progress
+   - Configure settings
+
+## Project Structure
+
+```
+.
+├── cmd/           # Main application entry point
+├── client/        # HTTP client implementation
+├── config/        # Configuration management
+├── controller/    # Business logic and controllers
+├── manager/       # Download manager implementation
+├── models/        # Data models and structures
+├── ui/            # Terminal user interface components
+└── util/          # Utility functions and helpers
+```
+
+## Dependencies
+
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - Terminal UI framework
+- [Lip Gloss](https://github.com/charmbracelet/lipgloss) - Style definitions for terminal UI
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contributors
+
+- Nima Alighardashi (401100466)
+- Mohammad Javad Gharegozlou (401170134) - mjghrfr@gmail.com
+- Shaygan Adim (401109971)
+
+## Screenshots
 
 <div style="display: flex; gap: 25px;">
-  <img src="https://iili.io/3zG949f.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
-  <img src="https://iili.io/3zG96u4.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
-  <img src="https://iili.io/3zG9Pwl.png" alt="Description of the image" width="250" height=300 style="border-radius: 55px;" />
+  <img src="https://iili.io/3zG949f.png" alt="Download Manager Interface" width="250" height=300 style="border-radius: 55px;" />
+  <img src="https://iili.io/3zG96u4.png" alt="Queue Management" width="250" height=300 style="border-radius: 55px;" />
+  <img src="https://iili.io/3zG9Pwl.png" alt="Progress Tracking" width="250" height=300 style="border-radius: 55px;" />
 </div>
 
