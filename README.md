@@ -3,7 +3,6 @@
 A high-performance file download manager built with Go, featuring concurrent downloads, pause/resume functionality, and advanced queue management.
 
 [![Go Version](https://img.shields.io/badge/Go-1.23.4-blue.svg)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Features
 
@@ -67,10 +66,6 @@ go run cmd/main.go
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Contributors
 
