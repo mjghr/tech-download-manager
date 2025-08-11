@@ -67,17 +67,5 @@ go run cmd/main.go
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Contributors
 
-- Nima Alighardashi (401100466)
-- Mohammad Javad Gharegozlou (401170134) - mjghrfr@gmail.com
-- Shaygan Adim (401109971)
-
-## Screenshots
-
-<div style="display: flex; gap: 25px;">
-  <img src="https://iili.io/3zG949f.png" alt="Download Manager Interface" width="250" height=300 style="border-radius: 55px;" />
-  <img src="https://iili.io/3zG96u4.png" alt="Queue Management" width="250" height=300 style="border-radius: 55px;" />
-  <img src="https://iili.io/3zG9Pwl.png" alt="Progress Tracking" width="250" height=300 style="border-radius: 55px;" />
-</div>
 
